@@ -1,0 +1,11 @@
+import { SignupForm } from "@/components/auth/SignupForm";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+    title: "Create Account",
+    description: "Create your free BulkMailer account",
+};
+
+export default function SignupPage() {
+    return <SignupForm />;
+}
