@@ -108,12 +108,23 @@ export const authOptions: NextAuthOptions = {
                 token.id = user.id;
                 token.plan = (user as any).plan ?? "FREE";
             }
+
+            // Always ensure workspaceId is in the token if we have a user ID
+            if (token.id && !token.workspaceId) {
+                await connectDB();
+                const member = await WorkspaceMember.findOne({ userId: token.id });
+                if (member) {
+                    token.workspaceId = member.workspaceId.toString();
+                }
+            }
+
             return token;
         },
         async session({ session, token }) {
             if (token && session.user) {
                 session.user.id = token.id as string;
                 session.user.plan = (token.plan as string) ?? "FREE";
+                session.user.workspaceId = token.workspaceId as string;
             }
             return session;
         },
