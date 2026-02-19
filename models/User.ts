@@ -27,7 +27,11 @@ const UserSchema = new Schema<IUser>(
             default: "FREE",
         },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true }
+    }
 );
 
 // Hash password before saving (Mongoose 7+ async pre hook without next)

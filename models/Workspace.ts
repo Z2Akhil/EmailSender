@@ -21,19 +21,29 @@ const WorkspaceSchema = new Schema<IWorkspace>(
         name: { type: String, required: true, trim: true },
         ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true }
+    }
 );
 
-const WorkspaceMemberSchema = new Schema<IWorkspaceMember>({
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
-    role: {
-        type: String,
-        enum: ["OWNER", "ADMIN", "MEMBER"],
-        default: "MEMBER",
+const WorkspaceMemberSchema = new Schema<IWorkspaceMember>(
+    {
+        userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
+        role: {
+            type: String,
+            enum: ["OWNER", "ADMIN", "MEMBER"],
+            default: "MEMBER",
+        },
+        joinedAt: { type: Date, default: Date.now },
     },
-    joinedAt: { type: Date, default: Date.now },
-});
+    {
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true }
+    }
+);
 
 WorkspaceMemberSchema.index({ userId: 1, workspaceId: 1 }, { unique: true });
 

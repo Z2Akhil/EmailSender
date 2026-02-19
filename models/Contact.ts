@@ -28,7 +28,11 @@ const ContactListSchema = new Schema<IContactList>(
         workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
         contactCount: { type: Number, default: 0 },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true }
+    }
 );
 
 const ContactSchema = new Schema<IContact>(
@@ -45,7 +49,11 @@ const ContactSchema = new Schema<IContact>(
             default: "ACTIVE",
         },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true }
+    }
 );
 
 // Unique email per list

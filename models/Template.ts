@@ -21,7 +21,11 @@ const TemplateSchema = new Schema<ITemplate>(
         workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace" },
         isGlobal: { type: Boolean, default: false },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true }
+    }
 );
 
 TemplateSchema.index({ workspaceId: 1 });

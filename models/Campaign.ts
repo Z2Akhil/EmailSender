@@ -64,7 +64,11 @@ const CampaignSchema = new Schema<ICampaign>(
         bounceCount: { type: Number, default: 0 },
         unsubscribeCount: { type: Number, default: 0 },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true }
+    }
 );
 
 CampaignSchema.index({ workspaceId: 1, status: 1 });
@@ -84,7 +88,11 @@ const CampaignRecipientSchema = new Schema<ICampaignRecipient>(
         clickedAt: { type: Date },
         bouncedAt: { type: Date },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true }
+    }
 );
 
 CampaignRecipientSchema.index({ campaignId: 1, contactId: 1 }, { unique: true });
