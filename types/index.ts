@@ -57,6 +57,13 @@ export interface Campaign {
     sentAt?: Date | null;
     workspaceId: string;
     templateId?: string | null;
+    recipientListId?: string | null;
+    totalRecipients: number;
+    sentCount: number;
+    openCount: number;
+    clickCount: number;
+    bounceCount: number;
+    unsubscribeCount: number;
     createdAt: Date;
     updatedAt: Date;
 }

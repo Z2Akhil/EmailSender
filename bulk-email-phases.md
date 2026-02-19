@@ -6,9 +6,9 @@
 
 | Phase | Name | Duration | Status |
 |---|---|---|---|
-| Phase 1 | Foundation & Setup | Week 1–2 | 🔄 In Progress |
-| Phase 2 | Contact Management | Week 3 | 🔲 Not Started |
-| Phase 3 | Campaign Builder | Week 4–5 | 🔲 Not Started |
+| Phase 1 | Foundation & Setup | Week 1–2 | ✅ Done |
+| Phase 2 | Contact Management | Week 3 | ✅ Done |
+| Phase 3 | Campaign Builder | Week 4–5 | 🔄 In Progress |
 | Phase 4 | Sending Engine | Week 6 | 🔲 Not Started |
 | Phase 5 | Analytics | Week 7 | 🔲 Not Started |
 | Phase 6 | Polish & Launch | Week 8 | 🔲 Not Started |
@@ -66,30 +66,30 @@
 ### Tasks
 
 #### Contact Upload
-- [ ] CSV file upload UI (drag & drop)
-- [ ] Excel (.xlsx) file upload support
-- [ ] Parse uploaded file using `csv-parse` and `xlsx`
-- [ ] Map columns (email, first name, last name, etc.)
-- [ ] Preview contacts before confirming import
-- [ ] Handle errors (missing email column, invalid emails)
+- [x] CSV file upload UI (drag & drop)
+- [x] Excel (.xlsx) file upload support
+- [x] Parse uploaded file using `csv-parse` and `xlsx`
+- [x] Map columns (email, first name, last name, etc.)
+- [x] Preview contacts before confirming import
+- [x] Handle errors (missing email column, invalid emails)
 
 #### Contact List Management
-- [ ] Create / rename / delete contact lists
-- [ ] View all contacts in a list (paginated table)
-- [ ] Search and filter contacts
-- [ ] Manual contact add (single entry form)
-- [ ] Delete individual contacts
-- [ ] Export contacts back to CSV
+- [x] Create / rename / delete contact lists
+- [x] View all contacts in a list (paginated table)
+- [x] Search and filter contacts
+- [x] Manual contact add (single entry form)
+- [x] Delete individual contacts
+- [x] Export contacts back to CSV
 
 #### Data Integrity
-- [ ] Validate email format on import
-- [ ] Detect and skip duplicate emails within the same list
-- [ ] Show import summary (total imported, skipped, errors)
+- [x] Validate email format on import
+- [x] Detect and skip duplicate emails within the same list
+- [x] Show import summary (total imported, skipped, errors)
 
 #### Unsubscribe Handling
-- [ ] Mark contacts as unsubscribed
-- [ ] Suppress unsubscribed contacts from future sends automatically
-- [ ] View unsubscribed contacts list
+- [x] Mark contacts as unsubscribed
+- [ ] Suppress unsubscribed contacts from future sends automatically (Phase 4)
+- [x] View unsubscribed contacts list (filtered view)
 
 ### Deliverables
 - Users can upload CSV/Excel files and manage contact lists
