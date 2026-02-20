@@ -16,6 +16,8 @@ interface SMTPInfo {
 
 export default function SMTPSettingsPage() {
     const queryClient = useQueryClient();
+
+    // Form state
     const [formData, setFormData] = useState({
         smtpHost: "",
         smtpPort: 587,
@@ -23,8 +25,12 @@ export default function SMTPSettingsPage() {
         smtpPass: "",
         smtpSecure: true,
     });
+
+    // Track if password was modified by user
+    const [isPasswordModified, setIsPasswordModified] = useState(false);
     const [testRecipient, setTestRecipient] = useState("");
 
+    // Fetch existing settings
     const { data: smtpData, isLoading } = useQuery<ApiResponse<SMTPInfo>>({
         queryKey: ["settings-smtp"],
         queryFn: async () => {
@@ -33,25 +39,35 @@ export default function SMTPSettingsPage() {
         },
     });
 
+    // Populate form when data loads
     useEffect(() => {
         if (smtpData?.data) {
             setFormData({
-                ...formData,
                 smtpHost: smtpData.data.smtpHost || "",
                 smtpPort: smtpData.data.smtpPort || 587,
                 smtpUser: smtpData.data.smtpUser || "",
                 smtpSecure: smtpData.data.smtpSecure ?? true,
-                smtpPass: smtpData.data.smtpPass || "",
+                smtpPass: smtpData.data.smtpPass || "", // Will be "••••••••" from API
             });
+            setIsPasswordModified(false);
         }
     }, [smtpData]);
 
+    // Save mutation with correct flags
     const saveMutation = useMutation({
-        mutationFn: async (data: typeof formData) => {
+        mutationFn: async () => {
             const res = await fetch("/api/settings/smtp", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                body: JSON.stringify({
+                    smtpHost: formData.smtpHost,
+                    smtpPort: formData.smtpPort || 587,
+                    smtpUser: formData.smtpUser,
+                    smtpSecure: formData.smtpSecure || true,
+                    smtpPass: isPasswordModified ? formData.smtpPass : "••••••••",
+                    testOnly: false,
+                    sendTestEmail: false,
+                }),
             });
             if (!res.ok) {
                 const err = await res.json();
@@ -61,23 +77,29 @@ export default function SMTPSettingsPage() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["settings-smtp"] });
-            alert("SMTP settings saved and verified successfully!");
+            setIsPasswordModified(false);
+            alert("SMTP settings saved successfully!");
         },
         onError: (error: any) => {
             alert(error.message);
         }
     });
 
+    // Test/Verify mutation
     const testMutation = useMutation({
         mutationFn: async (mode: "verify" | "send") => {
             const res = await fetch("/api/settings/smtp", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    ...formData,
+                    smtpHost: formData.smtpHost,
+                    smtpPort: formData.smtpPort,
+                    smtpUser: formData.smtpUser,
+                    smtpSecure: formData.smtpSecure,
+                    smtpPass: isPasswordModified ? formData.smtpPass : "••••••••",
                     testOnly: mode === "verify",
                     sendTestEmail: mode === "send",
-                    testRecipient: mode === "send" ? testRecipient : undefined
+                    testRecipient: mode === "send" ? testRecipient : undefined,
                 }),
             });
             if (!res.ok) {
@@ -88,11 +110,17 @@ export default function SMTPSettingsPage() {
         },
         onSuccess: (data) => {
             alert(data.message || "Action successful!");
+            if (data.message?.includes("sent")) {
+                setTestRecipient(""); // Clear after success
+            }
         },
         onError: (error: any) => {
             alert(error.message);
         }
     });
+
+    // Email validation helper
+    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
     if (isLoading) {
         return (
@@ -168,7 +196,7 @@ export default function SMTPSettingsPage() {
                             value={formData.smtpPort || ""}
                             onChange={(e) => {
                                 const val = e.target.value;
-                                const port = val === "" ? 0 : parseInt(val);
+                                const port = val === "" ? 587 : parseInt(val); // ✅ Fixed: default to 587
                                 // Auto-toggle secure based on common ports
                                 let secure = formData.smtpSecure;
                                 if (port === 465) secure = true;
@@ -211,15 +239,17 @@ export default function SMTPSettingsPage() {
                         <input
                             type="password"
                             value={formData.smtpPass}
-                            onChange={(e) => setFormData({ ...formData, smtpPass: e.target.value })}
-                            onFocus={(e) => {
-                                if (e.target.value === "••••••••") {
-                                    setFormData({ ...formData, smtpPass: "" });
-                                }
+                            onChange={(e) => {
+                                setFormData({ ...formData, smtpPass: e.target.value });
+                                setIsPasswordModified(true); // ✅ Track modification
                             }}
+                            // ✅ Removed: onFocus handler that cleared the field
                             className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-600 transition-all font-mono"
                             placeholder="••••••••"
                         />
+                        {formData.smtpPass === "••••••••" && (
+                            <p className="text-xs text-gray-400">Password is saved (hidden for security)</p>
+                        )}
                     </div>
                 </div>
 
@@ -239,7 +269,7 @@ export default function SMTPSettingsPage() {
                         />
                         <button
                             onClick={() => testMutation.mutate("send")}
-                            disabled={testMutation.isPending || !testRecipient || !formData.smtpHost}
+                            disabled={testMutation.isPending || !isValidEmail(testRecipient) || !formData.smtpHost}
                             className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all whitespace-nowrap"
                         >
                             {testMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Send Test"}
@@ -265,7 +295,7 @@ export default function SMTPSettingsPage() {
                 <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-gray-50">
                     <button
                         onClick={() => testMutation.mutate("verify")}
-                        disabled={testMutation.isPending || saveMutation.isPending || !formData.smtpHost || !formData.smtpPass}
+                        disabled={testMutation.isPending || saveMutation.isPending || !formData.smtpHost}
                         className="w-full sm:w-auto px-6 py-3 text-indigo-600 font-bold text-sm hover:bg-indigo-50 rounded-2xl transition-all flex items-center justify-center gap-2"
                     >
                         {testMutation.isPending ? (
@@ -277,8 +307,8 @@ export default function SMTPSettingsPage() {
                     </button>
 
                     <button
-                        onClick={() => saveMutation.mutate(formData)}
-                        disabled={saveMutation.isPending || testMutation.isPending || !formData.smtpHost || !formData.smtpPass}
+                        onClick={() => saveMutation.mutate()}
+                        disabled={saveMutation.isPending || testMutation.isPending || !formData.smtpHost || (!isPasswordModified && !formData.smtpPass)}
                         className="w-full sm:w-auto bg-indigo-600 text-white text-sm font-bold px-10 py-3 rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-100 active:scale-95"
                     >
                         {saveMutation.isPending ? (

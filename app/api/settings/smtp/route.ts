@@ -78,9 +78,9 @@ export async function POST(req: NextRequest) {
                 user: validated.smtpUser,
                 pass: rawPass,
             },
-            connectionTimeout: 10000,
-            greetingTimeout: 10000,
-            socketTimeout: 10000,
+            connectionTimeout: 20000,
+            greetingTimeout: 20000,
+            socketTimeout: 20000,
             tls: {
                 rejectUnauthorized: process.env.NODE_ENV === "production"
             }
@@ -96,8 +96,8 @@ export async function POST(req: NextRequest) {
                     from: `"${session!.user.name}" <${validated.smtpUser}>`,
                     to: testRecipient,
                     subject: "BulkMailer SMTP Test",
-                    text: "Your SMTP settings are working correctly!",
-                    html: "<b>Your SMTP settings are working correctly!</b>",
+                    text: "Your SMTP settings are working correctly! 2nd times..",
+                    html: "<b>Your SMTP settings are working correctly! 2nd times..</b>",
                 });
             }
         } catch (err: any) {
