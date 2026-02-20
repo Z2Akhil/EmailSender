@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Mail, Loader2, Filter } from "lucide-react";
 import Link from "next/link";
 import { Campaign, ApiResponse } from "@/types";
@@ -15,6 +15,7 @@ const FILTERS = [
 ];
 
 export default function CampaignsPage() {
+    const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
 
@@ -24,6 +25,46 @@ export default function CampaignsPage() {
             const res = await fetch("/api/campaigns");
             if (!res.ok) throw new Error("Failed to fetch campaigns");
             return res.json();
+        },
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: async (id: string) => {
+            if (!confirm("Are you sure you want to delete this campaign?")) return;
+            const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+            if (!res.ok) throw new Error("Failed to delete campaign");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+        },
+    });
+
+    const duplicateMutation = useMutation({
+        mutationFn: async (id: string) => {
+            const res = await fetch(`/api/campaigns/${id}`);
+            if (!res.ok) throw new Error("Source campaign not found");
+            const { data: source } = await res.json();
+
+            const createRes = await fetch("/api/campaigns", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: `${source.name} (Copy)`,
+                    subject: source.subject,
+                    fromName: source.fromName,
+                    fromEmail: source.fromEmail,
+                    replyTo: source.replyTo,
+                    templateId: source.templateId,
+                    htmlContent: source.htmlContent,
+                    recipientListId: source.recipientListId,
+                }),
+            });
+            if (!createRes.ok) throw new Error("Failed to duplicate campaign");
+            return createRes.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["campaigns"] });
         },
     });
 
@@ -61,8 +102,8 @@ export default function CampaignsPage() {
                             key={f.value}
                             onClick={() => setStatusFilter(f.value)}
                             className={`whitespace-nowrap px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${statusFilter === f.value
-                                    ? "bg-white text-gray-900 shadow-sm"
-                                    : "text-gray-500 hover:text-gray-700"
+                                ? "bg-white text-gray-900 shadow-sm"
+                                : "text-gray-500 hover:text-gray-700"
                                 }`}
                         >
                             {f.label}
@@ -108,7 +149,8 @@ export default function CampaignsPage() {
                         <CampaignCard
                             key={campaign.id}
                             campaign={campaign}
-                            onDelete={(id) => console.log('Delete', id)}
+                            onDelete={(id) => deleteMutation.mutate(id)}
+                            onDuplicate={(id) => duplicateMutation.mutate(id)}
                         />
                     ))}
                 </div>

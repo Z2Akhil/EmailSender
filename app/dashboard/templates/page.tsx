@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, FileText, Loader2, LayoutGrid, List } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, Search, FileText, Loader2, LayoutGrid, List, X } from "lucide-react";
 import { Template, ApiResponse } from "@/types";
 import { TemplateCard } from "@/components/templates/TemplateCard";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const CATEGORIES = [
     { label: "All Templates", value: "all" },
@@ -13,9 +14,13 @@ const CATEGORIES = [
 ];
 
 export default function TemplatesPage() {
+    const router = useRouter();
+    const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
     const [category, setCategory] = useState("all");
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [newTemplate, setNewTemplate] = useState({ name: "", description: "", htmlContent: "" });
 
     const { data: templatesData, isLoading } = useQuery<ApiResponse<Template[]>>({
         queryKey: ["templates"],
@@ -26,9 +31,26 @@ export default function TemplatesPage() {
         },
     });
 
+    const createTemplateMutation = useMutation({
+        mutationFn: async (data: typeof newTemplate) => {
+            const res = await fetch("/api/templates", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+            });
+            if (!res.ok) throw new Error("Failed to create template");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["templates"] });
+            setIsCreateModalOpen(false);
+            setNewTemplate({ name: "", description: "", htmlContent: "" });
+        },
+    });
+
     const templates = templatesData?.data || [];
 
-    const filteredTemplates = templates.filter(t => {
+    const filteredTemplates = templates.filter((t: Template) => {
         const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase()) ||
             t.description?.toLowerCase().includes(search.toLowerCase());
         const matchesCategory = category === "all" ||
@@ -36,6 +58,10 @@ export default function TemplatesPage() {
             (category === "custom" && !t.isGlobal);
         return matchesSearch && matchesCategory;
     });
+
+    const handleSelect = (template: Template) => {
+        router.push(`/dashboard/campaigns/new?templateId=${template.id}`);
+    };
 
     return (
         <div className="max-w-6xl mx-auto">
@@ -45,7 +71,10 @@ export default function TemplatesPage() {
                     <h1 className="text-2xl font-bold text-gray-900">Email Templates</h1>
                     <p className="text-gray-500 mt-1">Select a starting point for your next campaign</p>
                 </div>
-                <button className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-sm">
+                <button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+                >
                     <Plus className="w-4 h-4" />
                     Create Custom
                 </button>
@@ -59,8 +88,8 @@ export default function TemplatesPage() {
                             key={c.value}
                             onClick={() => setCategory(c.value)}
                             className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${category === c.value
-                                    ? "bg-white text-gray-900 shadow-sm"
-                                    : "text-gray-500 hover:text-gray-700"
+                                ? "bg-white text-gray-900 shadow-sm"
+                                : "text-gray-500 hover:text-gray-700"
                                 }`}
                         >
                             {c.label}
@@ -120,8 +149,8 @@ export default function TemplatesPage() {
                         <TemplateCard
                             key={template.id}
                             template={template}
-                            onSelect={() => console.log("Select", template.id)}
-                            onPreview={() => console.log("Preview", template.id)}
+                            onSelect={handleSelect}
+                            onPreview={() => window.open(`/api/templates/${template.id}/preview`, '_blank')}
                         />
                     ))}
                 </div>
@@ -140,6 +169,61 @@ export default function TemplatesPage() {
                     >
                         Clear all filters
                     </button>
+                </div>
+            )}
+
+            {/* Create Modal */}
+            {isCreateModalOpen && (
+                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                            <h2 className="text-xl font-bold text-gray-900">Create Custom Template</h2>
+                            <button onClick={() => setIsCreateModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                                <X className="w-5 h-5 text-gray-400" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4 overflow-y-auto">
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700">Template Name</label>
+                                <input
+                                    type="text"
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                    placeholder="e.g. Sales Follow-up"
+                                    value={newTemplate.name}
+                                    onChange={e => setNewTemplate({ ...newTemplate, name: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700">Description</label>
+                                <input
+                                    type="text"
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                    placeholder="What is this template for?"
+                                    value={newTemplate.description}
+                                    onChange={e => setNewTemplate({ ...newTemplate, description: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700">HTML Content</label>
+                                <textarea
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all min-h-[300px] font-mono"
+                                    placeholder="<h1>Hello {{name}}!</h1>"
+                                    value={newTemplate.htmlContent}
+                                    onChange={e => setNewTemplate({ ...newTemplate, htmlContent: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-gray-100 flex items-center justify-end gap-3">
+                            <button onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
+                            <button
+                                onClick={() => createTemplateMutation.mutate(newTemplate)}
+                                disabled={createTemplateMutation.isPending || !newTemplate.name || !newTemplate.htmlContent}
+                                className="bg-blue-600 text-white text-sm font-semibold px-6 py-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg shadow-blue-200"
+                            >
+                                {createTemplateMutation.isPending ? "Creating..." : "Save Template"}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

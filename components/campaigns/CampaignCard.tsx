@@ -45,7 +45,11 @@ export function CampaignCard({ campaign, onDelete, onDuplicate }: CampaignCardPr
                             <MoreVertical className="w-5 h-5" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuItem className="cursor-pointer">Edit Campaign</DropdownMenuItem>
+                            <DropdownMenuItem asChild className="cursor-pointer">
+                                <Link href={`/dashboard/campaigns/${campaign.id}/edit`}>
+                                    Edit Campaign
+                                </Link>
+                            </DropdownMenuItem>
                             <DropdownMenuItem className="cursor-pointer" onClick={() => onDuplicate?.(campaign.id)}>Duplicate</DropdownMenuItem>
                             <DropdownMenuItem className="text-red-600 focus:text-red-600 cursor-pointer" onClick={() => onDelete?.(campaign.id)}>Delete</DropdownMenuItem>
                         </DropdownMenuContent>
@@ -64,7 +68,7 @@ export function CampaignCard({ campaign, onDelete, onDuplicate }: CampaignCardPr
             <div className="grid grid-cols-2 gap-4 mb-6 pt-4 border-t border-gray-50">
                 <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Recipients</p>
-                    <p className="text-sm font-semibold text-gray-700">{campaign.totalRecipients.toLocaleString()}</p>
+                    <p className="text-sm font-semibold text-gray-700">{campaign.totalRecipients?.toLocaleString() || 0}</p>
                 </div>
                 {campaign.status === 'SENT' ? (
                     <div>
@@ -90,7 +94,7 @@ export function CampaignCard({ campaign, onDelete, onDuplicate }: CampaignCardPr
 
             <div className="flex gap-2">
                 <Link
-                    href={`/dashboard/campaigns/${campaign.id}`}
+                    href={`/dashboard/campaigns/${campaign.id}/edit`}
                     className="flex-1 inline-flex items-center justify-center gap-2 bg-gray-50 text-gray-700 text-sm font-medium py-2 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all"
                 >
                     {campaign.status === 'SENT' ? 'View Report' : 'Continue Editing'}
