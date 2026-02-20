@@ -20,9 +20,10 @@ const campaignUpdateSchema = z.object({
 
 export async function GET(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const session = await getServerSession(authOptions);
         if (!session?.user?.workspaceId) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -31,7 +32,7 @@ export async function GET(
         await connectDB();
 
         const campaign = await Campaign.findOne({
-            _id: params.id,
+            _id: id,
             workspaceId: session.user.workspaceId
         });
 
@@ -48,9 +49,10 @@ export async function GET(
 
 export async function PATCH(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const session = await getServerSession(authOptions);
         if (!session?.user?.workspaceId) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -62,7 +64,7 @@ export async function PATCH(
         await connectDB();
 
         const campaign = await Campaign.findOneAndUpdate(
-            { _id: params.id, workspaceId: session.user.workspaceId },
+            { _id: id, workspaceId: session.user.workspaceId },
             { $set: validated },
             { new: true }
         );
@@ -83,9 +85,10 @@ export async function PATCH(
 
 export async function DELETE(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const session = await getServerSession(authOptions);
         if (!session?.user?.workspaceId) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -94,7 +97,7 @@ export async function DELETE(
         await connectDB();
 
         const campaign = await Campaign.findOneAndDelete({
-            _id: params.id,
+            _id: id,
             workspaceId: session.user.workspaceId
         });
 

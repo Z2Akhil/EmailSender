@@ -51,8 +51,8 @@ export default function TemplatesPage() {
     const templates = templatesData?.data || [];
 
     const filteredTemplates = templates.filter((t: Template) => {
-        const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase()) ||
-            t.description?.toLowerCase().includes(search.toLowerCase());
+        const matchesSearch = (t.name?.toLowerCase() || "").includes(search.toLowerCase()) ||
+            (t.description?.toLowerCase() || "").includes(search.toLowerCase());
         const matchesCategory = category === "all" ||
             (category === "official" && t.isGlobal) ||
             (category === "custom" && !t.isGlobal);

@@ -33,16 +33,52 @@ export const initWorker = () => {
                     }
                 }
 
-                // 3. Prepare Content (Simple Variable Replacement)
+                // 3. Sync/Create Recipient Status early to get ID
+                const recipientStatus = await CampaignRecipient.findOneAndUpdate(
+                    { campaignId, contactId },
+                    {
+                        email: recipientEmail,
+                        status: "PENDING",
+                        updatedAt: new Date()
+                    },
+                    { upsert: true, new: true }
+                );
+
+                const recipientId = recipientStatus._id.toString();
+
+                // 4. Prepare Content (Simple Variable Replacement)
                 let html = campaign.htmlContent;
                 html = html.replace(/{{firstName}}/g, recipientName || "there");
                 html = html.replace(/{{email}}/g, recipientEmail);
 
-                // 4. Inject Compliance Footer
+                // 5. Inject Open Tracking Pixel
+                const openTrackingUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/track/open/${recipientId}`;
+                html = html.replace("</body>", `<img src="${openTrackingUrl}" width="1" height="1" style="display:none;" /></body>`);
+                if (!html.includes("</body>")) {
+                    html += `<img src="${openTrackingUrl}" width="1" height="1" style="display:none;" />`;
+                }
+
+                // 6. Wrap Links for Click Tracking
+                const clickTrackingBaseUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/track/click`;
+                html = html.replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"/gi, (match, url) => {
+                    // Skip if it's already a tracking URL or an anchor/mailto/tel
+                    if (url.startsWith(clickTrackingBaseUrl) || url.startsWith("#") || url.startsWith("mailto:") || url.startsWith("tel:")) {
+                        return match;
+                    }
+                    // Skip unsubscribe links (they have their own tracking logic usually, or should be direct)
+                    if (url.includes("/unsubscribe")) {
+                        return match;
+                    }
+
+                    const trackedUrl = `${clickTrackingBaseUrl}?r=${recipientId}&u=${encodeURIComponent(url)}`;
+                    return match.replace(url, trackedUrl);
+                });
+
+                // 7. Inject Compliance Footer
                 const unsubscribeUrl = `${process.env.NEXT_PUBLIC_APP_URL}/unsubscribe?email=${encodeURIComponent(recipientEmail)}&cid=${campaignId}`;
                 html = injectComplianceFooter(html, unsubscribeUrl);
 
-                // 5. Send Email
+                // 8. Send Email
                 const result = await sendEmail({
                     to: recipientEmail,
                     subject: campaign.subject,
@@ -52,15 +88,11 @@ export const initWorker = () => {
                     replyTo: campaign.replyTo,
                 });
 
-                // 6. Update Statuses
-                await CampaignRecipient.findOneAndUpdate(
-                    { campaignId, contactId },
-                    {
-                        status: "DELIVERED",
-                        updatedAt: new Date()
-                    },
-                    { upsert: true }
-                );
+                // 9. Update Statuses
+                await CampaignRecipient.findByIdAndUpdate(recipientId, {
+                    status: "DELIVERED",
+                    updatedAt: new Date()
+                });
 
                 await Campaign.findByIdAndUpdate(campaignId, {
                     $inc: { sentCount: 1 }

@@ -78,19 +78,33 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         enabled: currentStep === "TEMPLATE" || !!urlTemplateId,
     });
 
+    const [isTemplateLoading, setIsTemplateLoading] = useState(false);
+
     // Auto-select template if ID in URL
     useEffect(() => {
-        if (urlTemplateId && templatesData?.data && !formData.templateId) {
-            const template = templatesData.data.find(t => t.id === urlTemplateId || (t as any)._id === urlTemplateId);
-            if (template) {
-                setFormData(prev => ({
-                    ...prev,
-                    templateId: template.id || (template as any)._id,
-                    htmlContent: template.htmlContent,
-                }));
+        const fetchTemplate = async (id: string) => {
+            setIsTemplateLoading(true);
+            try {
+                const res = await fetch(`/api/templates/${id}`);
+                const { data: template } = await res.json();
+                if (template) {
+                    setFormData(prev => ({
+                        ...prev,
+                        templateId: template.id || (template as any)._id,
+                        htmlContent: template.htmlContent,
+                    }));
+                }
+            } catch (err) {
+                console.error("Failed to fetch template:", err);
+            } finally {
+                setIsTemplateLoading(false);
             }
+        };
+
+        if (urlTemplateId && !formData.templateId) {
+            fetchTemplate(urlTemplateId);
         }
-    }, [urlTemplateId, templatesData, formData.templateId]);
+    }, [urlTemplateId, formData.templateId]);
 
     const { data: listsData, isLoading: isLoadingLists } = useQuery<ApiResponse<ContactList[]>>({
         queryKey: ["contact-lists"],
@@ -125,14 +139,24 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         if (prevStep) setCurrentStep(prevStep.id);
     };
 
-    const selectTemplate = (template: Template) => {
-        setFormData({
-            ...formData,
-            templateId: template.id,
-            htmlContent: template.htmlContent,
-            textContent: "",
-        });
-        handleNext();
+    const selectTemplate = async (template: Template) => {
+        setIsTemplateLoading(true);
+        try {
+            const res = await fetch(`/api/templates/${template.id}`);
+            const { data: fullTemplate } = await res.json();
+
+            setFormData({
+                ...formData,
+                templateId: fullTemplate.id,
+                htmlContent: fullTemplate.htmlContent,
+                textContent: "",
+            });
+            handleNext();
+        } catch (err) {
+            console.error("Failed to fetch full template content:", err);
+        } finally {
+            setIsTemplateLoading(false);
+        }
     };
 
     const selectList = (list: ContactList) => {
@@ -557,13 +581,13 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                 {currentStep as string === "REVIEW" ? (
                     <button
                         onClick={() => mutation.mutate()}
-                        disabled={mutation.isPending}
+                        disabled={mutation.isPending || isTemplateLoading}
                         className="flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-200"
                     >
-                        {mutation.isPending ? (
+                        {mutation.isPending || isTemplateLoading ? (
                             <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                Saving...
+                                {isTemplateLoading ? "Loading Template..." : "Saving..."}
                             </>
                         ) : (
                             <>
@@ -576,6 +600,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                     <button
                         onClick={handleNext}
                         disabled={
+                            isTemplateLoading ||
                             (currentStep === "SETTINGS" && (!formData.name || !formData.subject || !formData.fromName || !formData.fromEmail)) ||
                             (currentStep === "TEMPLATE" && !formData.templateId) ||
                             (currentStep === "RECIPIENTS" && !formData.recipientListId) ||
@@ -583,8 +608,17 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                         }
                         className="flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-200"
                     >
-                        Next Step
-                        <ChevronRight className="w-4 h-4" />
+                        {isTemplateLoading ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Loading...
+                            </>
+                        ) : (
+                            <>
+                                Next Step
+                                <ChevronRight className="w-4 h-4" />
+                            </>
+                        )}
                     </button>
                 )}
             </div>

@@ -4,6 +4,11 @@ export interface IWorkspace extends Document {
     _id: mongoose.Types.ObjectId;
     name: string;
     ownerId: mongoose.Types.ObjectId;
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string;
+    stripePriceId?: string;
+    subscriptionStatus?: "active" | "trialing" | "past_due" | "canceled" | "unpaid" | "incomplete";
+    planTier: "FREE" | "STARTER" | "PRO";
     createdAt: Date;
     updatedAt: Date;
 }
@@ -20,6 +25,18 @@ const WorkspaceSchema = new Schema<IWorkspace>(
     {
         name: { type: String, required: true, trim: true },
         ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        stripeCustomerId: { type: String },
+        stripeSubscriptionId: { type: String },
+        stripePriceId: { type: String },
+        subscriptionStatus: {
+            type: String,
+            enum: ["active", "trialing", "past_due", "canceled", "unpaid", "incomplete"],
+        },
+        planTier: {
+            type: String,
+            enum: ["FREE", "STARTER", "PRO"],
+            default: "FREE",
+        },
     },
     {
         timestamps: true,

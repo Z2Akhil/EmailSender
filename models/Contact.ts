@@ -17,6 +17,7 @@ export interface IContact extends Document {
     company?: string;
     phone?: string;
     listId: mongoose.Types.ObjectId;
+    workspaceId: mongoose.Types.ObjectId;
     status: "ACTIVE" | "UNSUBSCRIBED" | "BOUNCED";
     createdAt: Date;
     updatedAt: Date;
@@ -43,6 +44,7 @@ const ContactSchema = new Schema<IContact>(
         company: { type: String, trim: true },
         phone: { type: String, trim: true },
         listId: { type: Schema.Types.ObjectId, ref: "ContactList", required: true },
+        workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
         status: {
             type: String,
             enum: ["ACTIVE", "UNSUBSCRIBED", "BOUNCED"],
@@ -59,6 +61,8 @@ const ContactSchema = new Schema<IContact>(
 // Unique email per list
 ContactSchema.index({ email: 1, listId: 1 }, { unique: true });
 ContactSchema.index({ listId: 1, status: 1 });
+ContactSchema.index({ workspaceId: 1, status: 1 });
+ContactSchema.index({ workspaceId: 1, email: 1 });
 
 export const ContactList: Model<IContactList> =
     mongoose.models.ContactList ||

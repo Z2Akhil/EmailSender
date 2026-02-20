@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { ContactList, Contact } from "@/models/Contact";
 import mongoose from "mongoose";
+import { checkPlanLimits } from "@/lib/stripe";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -125,6 +126,13 @@ export async function POST(
             }
 
             try {
+                // Check Plan Limits (In-loop to ensure we don't exceed)
+                const limitCheck = await checkPlanLimits(session.user.workspaceId, "contacts");
+                if (!limitCheck.allowed) {
+                    errors.push({ row: i + 2, email: rawEmail, reason: `Plan limit reached (${limitCheck.limit} contacts). Please upgrade.` });
+                    break; // Stop importing further rows
+                }
+
                 await Contact.create({
                     email: rawEmail,
                     firstName: mapping.firstName ? row[mapping.firstName]?.toString().trim() || undefined : undefined,
@@ -132,6 +140,7 @@ export async function POST(
                     company: mapping.company ? row[mapping.company]?.toString().trim() || undefined : undefined,
                     phone: mapping.phone ? row[mapping.phone]?.toString().trim() || undefined : undefined,
                     listId: id,
+                    workspaceId: session.user.workspaceId,
                     status: "ACTIVE",
                 });
                 imported.push(rawEmail);

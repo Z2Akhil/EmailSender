@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { ContactList, Contact } from "@/models/Contact";
 import mongoose from "mongoose";
+import { checkPlanLimits } from "@/lib/stripe";
 
 // GET /api/contacts/lists/[id]/contacts
 // Query params: page, limit, search, status
@@ -134,6 +135,16 @@ export async function POST(
             return NextResponse.json({ success: false, error: "Contact with this email already exists in this list" }, { status: 409 });
         }
 
+        // Check Plan Limits
+        const limitCheck = await checkPlanLimits(session.user.workspaceId, "contacts");
+        if (!limitCheck.allowed) {
+            return NextResponse.json({
+                success: false,
+                error: `Plan limit reached. You have ${limitCheck.current} contacts and your limit is ${limitCheck.limit}. Please upgrade your plan.`,
+                code: "LIMIT_REACHED"
+            }, { status: 403 });
+        }
+
         const contact = await Contact.create({
             email: email.trim().toLowerCase(),
             firstName: firstName?.trim() || undefined,
@@ -141,6 +152,7 @@ export async function POST(
             company: company?.trim() || undefined,
             phone: phone?.trim() || undefined,
             listId: id,
+            workspaceId: session.user.workspaceId,
             status: "ACTIVE",
         });
 

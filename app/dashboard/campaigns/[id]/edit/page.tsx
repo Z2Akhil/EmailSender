@@ -1,14 +1,15 @@
 "use client";
 
+import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CampaignForm } from "@/components/campaigns/CampaignForm";
 import { ApiResponse, Campaign } from "@/types";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export default function EditCampaignPage({ params }: { params: { id: string } }) {
+export default function EditCampaignPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
-    const { id } = params;
+    const { id } = use(params);
 
     const { data: campaignData, isLoading, error } = useQuery<ApiResponse<Campaign>>({
         queryKey: ["campaign", id],

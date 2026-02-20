@@ -5,12 +5,15 @@ import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
 import { Contact } from "@/models/Contact";
 import { addEmailJob } from "@/lib/queue";
+import { checkPlanLimits } from "@/lib/stripe";
+import { strictRateLimit } from "@/lib/ratelimit";
 
 export async function POST(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const session = await getServerSession(authOptions);
         if (!session?.user?.workspaceId) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -18,9 +21,15 @@ export async function POST(
 
         await connectDB();
 
+        // Strict Rate Limiting for sending
+        const { success } = await strictRateLimit.limit(session.user.workspaceId);
+        if (!success) {
+            return NextResponse.json({ success: false, error: "Too many send attempts. Please wait a minute." }, { status: 429 });
+        }
+
         // 1. Fetch Campaign
         const campaign = await Campaign.findOne({
-            _id: params.id,
+            _id: id,
             workspaceId: session.user.workspaceId,
         });
 
@@ -44,6 +53,16 @@ export async function POST(
 
         if (contacts.length === 0) {
             return NextResponse.json({ success: false, error: "No active contacts in the selected list" }, { status: 400 });
+        }
+
+        // Check Plan Limits (Email Volume)
+        const limitCheck = await checkPlanLimits(session.user.workspaceId, "emails");
+        if (!limitCheck.allowed) {
+            return NextResponse.json({
+                success: false,
+                error: `Monthly email limit reached. You have sent ${limitCheck.current} emails and your limit is ${limitCheck.limit}. Please upgrade your plan.`,
+                code: "LIMIT_REACHED"
+            }, { status: 403 });
         }
 
         // 3. Update Campaign Status

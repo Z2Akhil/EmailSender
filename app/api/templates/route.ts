@@ -101,7 +101,9 @@ export async function GET(req: NextRequest) {
                 { isGlobal: true },
                 { workspaceId: session.user.workspaceId }
             ]
-        }).sort({ createdAt: -1 });
+        })
+            .select("-htmlContent")
+            .sort({ createdAt: -1 });
 
         return NextResponse.json({ success: true, data: templates });
     } catch (error) {

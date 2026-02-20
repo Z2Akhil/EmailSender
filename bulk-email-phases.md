@@ -10,8 +10,8 @@
 | Phase 2 | Contact Management | Week 3 | ✅ Done |
 | Phase 3 | Campaign Builder | Week 4–5 | ✅ Done |
 | Phase 4 | Sending Engine | Week 6 | ✅ Done |
-| Phase 5 | Analytics | Week 7 | 🔄 In Progress |
-| Phase 6 | Polish & Launch | Week 8 | 🔲 Not Started |
+| Phase 5 | Analytics | Week 7 | ✅ Done |
+| Phase 6 | Polish & Launch | Week 8 | 🔄 In Progress |
 
 ---
 
@@ -150,29 +150,29 @@
 ### Tasks
 
 #### Email Provider & Domain Authentication
-- [ ] Integrate Amazon SES API (`@aws-sdk/client-ses`)
-- [ ] Implement Domain Verification flow:
-    - [ ] UI for adding domain (`dashboard/settings/domains`)
-    - [ ] Call SES `CreateEmailIdentity` on domain add
-    - [ ] Display TXT (verification) and CNAME (DKIM) records to user
-    - [ ] Background job to poll SES for verification status
-    - [ ] Enable sending only for `VERIFIED` domains
-- [ ] Abstract sending logic into a unified `email.ts` service (SES primary, SendGrid backup)
-- [ ] Allow users to connect their own SMTP in settings (optional)
+- [x] Integrate Amazon SES API (`@aws-sdk/client-ses`)
+- [x] Implement Domain Verification flow:
+    - [x] UI for adding domain (`dashboard/settings/domains`)
+    - [x] Call SES `CreateEmailIdentity` on domain add
+    - [x] Display TXT (verification) and CNAME (DKIM) records to user
+    - [x] Background job to poll SES for verification status
+    - [x] Enable sending only for `VERIFIED` domains
+- [x] Abstract sending logic into a unified `email.ts` service (SES primary, SendGrid backup)
+- [x] Allow users to connect their own SMTP in settings (optional)
 
 #### Background Job Queue
-- [ ] Set up Redis (Upstash for serverless)
-- [ ] Configure BullMQ for email job queue
-- [ ] Create email worker that processes jobs in batches
+- [x] Set up Redis (Upstash for serverless)
+- [x] Configure BullMQ for email job queue
+- [x] Create email worker that processes jobs in batches
 - [ ] Rate limiting per job (respect provider limits)
 - [ ] Retry logic for failed sends
 
 #### Campaign Sending Flow
-- [ ] "Send Now" button triggers campaign dispatch
+- [x] "Send Now" button triggers campaign dispatch
 - [ ] Schedule send for a future date/time
 - [ ] Cancel scheduled campaign
 - [ ] Sending progress indicator (e.g., 450 / 2000 sent)
-- [ ] Per-recipient status tracking in MongoDB (delivered, failed, bounced)
+- [x] Per-recipient status tracking in MongoDB (delivered, failed, bounced)
 
 #### Compliance (Legal Requirements)
 - [ ] Auto-inject unsubscribe link in every email footer
@@ -194,26 +194,26 @@
 ### Tasks
 
 #### Tracking Setup
-- [ ] Open rate: embed invisible 1x1 tracking pixel in emails
-- [ ] Click rate: wrap all links through a redirect tracking URL (`/track/click?id=...`)
-- [ ] Record open and click events in MongoDB (CampaignRecipient collection)
+- [x] Open rate: embed invisible 1x1 tracking pixel in emails
+- [x] Click rate: wrap all links through a redirect tracking URL (`/track/click?id=...`)
+- [x] Record open and click events in MongoDB (CampaignRecipient collection)
 
 #### Campaign Analytics Page
-- [ ] Per-campaign stats: sent, delivered, opened, clicked, bounced, unsubscribed
-- [ ] Timeline chart: opens/clicks over 24–48 hours after send
+- [x] Per-campaign stats: sent, delivered, opened, clicked, bounced, unsubscribed
+- [x] Timeline chart: opens/clicks over 24–48 hours after send
 - [ ] Top clicked links list
-- [ ] Per-recipient status table (with search)
+- [x] Per-recipient status table (with search)
 
 #### Dashboard Overview
-- [ ] Total emails sent (all time and this month)
-- [ ] Average open rate across all campaigns
-- [ ] Average click-through rate
-- [ ] Recent campaigns list with quick stats
-- [ ] Charts using Recharts
+- [x] Total emails sent (all time and this month)
+- [x] Average open rate across all campaigns
+- [x] Average click-through rate
+- [x] Recent campaigns list with quick stats
+- [x] Charts using Recharts
 
 #### Export
-- [ ] Export campaign report as CSV
-- [ ] Export recipient status list
+- [x] Export campaign report as CSV
+- [x] Export recipient status list
 
 ### Deliverables
 - Open and click tracking working end-to-end

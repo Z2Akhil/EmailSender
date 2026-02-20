@@ -75,6 +75,8 @@ const CampaignSchema = new Schema<ICampaign>(
 
 CampaignSchema.index({ workspaceId: 1, status: 1 });
 CampaignSchema.index({ workspaceId: 1, createdAt: -1 });
+CampaignSchema.index({ workspaceId: 1, recipientListId: 1 });
+CampaignSchema.index({ domainId: 1 });
 
 const CampaignRecipientSchema = new Schema<ICampaignRecipient>(
     {
