@@ -3,7 +3,9 @@ import { getRedisConnection } from "./redis";
 import { connectDB } from "./db";
 import { Campaign, CampaignRecipient } from "@/models/Campaign";
 import Domain from "@/models/Domain";
+import { Workspace } from "@/models/Workspace";
 import { sendEmail, injectComplianceFooter } from "./email-service";
+import { decrypt } from "./crypto";
 import mongoose from "mongoose";
 
 export const initWorker = () => {
@@ -78,7 +80,26 @@ export const initWorker = () => {
                 const unsubscribeUrl = `${process.env.NEXT_PUBLIC_APP_URL}/unsubscribe?email=${encodeURIComponent(recipientEmail)}&cid=${campaignId}`;
                 html = injectComplianceFooter(html, unsubscribeUrl);
 
-                // 8. Send Email
+                // 8. Fetch Workspace for SMTP settings
+                const workspace = await Workspace.findById(campaign.workspaceId);
+
+                let smtpConfig;
+                if (workspace?.smtpHost && workspace?.smtpPass) {
+                    try {
+                        const decryptedPass = decrypt(workspace.smtpPass);
+                        smtpConfig = {
+                            host: workspace.smtpHost,
+                            port: workspace.smtpPort || 587,
+                            user: workspace.smtpUser || "",
+                            pass: decryptedPass,
+                            secure: workspace.smtpSecure ?? true,
+                        };
+                    } catch (err) {
+                        console.error(`Failed to decrypt SMTP password for workspace ${campaign.workspaceId}:`, err);
+                    }
+                }
+
+                // 9. Send Email
                 const result = await sendEmail({
                     to: recipientEmail,
                     subject: campaign.subject,
@@ -86,9 +107,10 @@ export const initWorker = () => {
                     fromName: campaign.fromName,
                     fromEmail: campaign.fromEmail,
                     replyTo: campaign.replyTo,
+                    smtpConfig,
                 });
 
-                // 9. Update Statuses
+                // 10. Update Statuses
                 await CampaignRecipient.findByIdAndUpdate(recipientId, {
                     status: "DELIVERED",
                     updatedAt: new Date()

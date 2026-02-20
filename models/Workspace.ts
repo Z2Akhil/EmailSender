@@ -9,6 +9,12 @@ export interface IWorkspace extends Document {
     stripePriceId?: string;
     subscriptionStatus?: "active" | "trialing" | "past_due" | "canceled" | "unpaid" | "incomplete";
     planTier: "FREE" | "STARTER" | "PRO";
+    // SMTP Configuration
+    smtpHost?: string;
+    smtpPort?: number;
+    smtpUser?: string;
+    smtpPass?: string;
+    smtpSecure?: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -37,6 +43,12 @@ const WorkspaceSchema = new Schema<IWorkspace>(
             enum: ["FREE", "STARTER", "PRO"],
             default: "FREE",
         },
+        // SMTP Config
+        smtpHost: { type: String, trim: true },
+        smtpPort: { type: Number },
+        smtpUser: { type: String, trim: true },
+        smtpPass: { type: String }, // Should be encrypted in production
+        smtpSecure: { type: Boolean, default: true },
     },
     {
         timestamps: true,

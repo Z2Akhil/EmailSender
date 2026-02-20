@@ -1,5 +1,6 @@
 import sgMail from "@sendgrid/mail";
-import { SESClient, SendRawEmailCommand, VerifyDomainIdentityCommand, GetIdentityVerificationAttributesCommand } from "@aws-sdk/client-ses";
+import { SESClient, VerifyDomainIdentityCommand, GetIdentityVerificationAttributesCommand } from "@aws-sdk/client-ses";
+import nodemailer from "nodemailer";
 
 if (process.env.SENDGRID_API_KEY) {
     sgMail.setApiKey(process.env.SENDGRID_API_KEY || "");
@@ -20,6 +21,13 @@ export interface SendEmailOptions {
     fromName?: string;
     fromEmail?: string;
     replyTo?: string;
+    smtpConfig?: {
+        host: string;
+        port: number;
+        user: string;
+        pass: string;
+        secure: boolean;
+    };
 }
 
 export const sendEmail = async ({
@@ -28,7 +36,8 @@ export const sendEmail = async ({
     html,
     fromName,
     fromEmail,
-    replyTo
+    replyTo,
+    smtpConfig
 }: SendEmailOptions) => {
     const from = {
         name: fromName || "BulkMailer",
@@ -44,7 +53,33 @@ export const sendEmail = async ({
     };
 
     try {
-        // Prefer SES if configured
+        // 1. Prefer Custom SMTP if provided
+        if (smtpConfig) {
+            const transporter = nodemailer.createTransport({
+                host: smtpConfig.host,
+                port: smtpConfig.port,
+                secure: smtpConfig.secure,
+                auth: {
+                    user: smtpConfig.user,
+                    pass: smtpConfig.pass,
+                },
+            });
+
+            const info = await transporter.sendMail({
+                from: fromName ? `"${fromName}" <${from.email}>` : from.email,
+                to,
+                subject,
+                html,
+                replyTo: replyTo || from.email,
+            });
+
+            return {
+                success: true,
+                messageId: info.messageId,
+            };
+        }
+
+        // 2. Fallback to SES if configured
         if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
             // Note: Simple SendEmail for now. Real bulk might need SendRawEmail or batches.
             // For now implementing via SES SendEmail or similar.

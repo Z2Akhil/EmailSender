@@ -116,3 +116,11 @@ declare module "next-auth" {
         };
     }
 }
+
+export interface SMTPConfig {
+    smtpHost: string;
+    smtpPort: number;
+    smtpUser: string;
+    smtpPass?: string;
+    smtpSecure: boolean;
+}
