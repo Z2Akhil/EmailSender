@@ -13,6 +13,7 @@ export interface ICampaign extends Document {
     scheduledAt?: Date;
     sentAt?: Date;
     workspaceId: mongoose.Types.ObjectId;
+    domainId?: mongoose.Types.ObjectId;
     templateId?: mongoose.Types.ObjectId;
     recipientListId?: mongoose.Types.ObjectId;
     totalRecipients: number;
@@ -55,6 +56,7 @@ const CampaignSchema = new Schema<ICampaign>(
         scheduledAt: { type: Date },
         sentAt: { type: Date },
         workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
+        domainId: { type: Schema.Types.ObjectId, ref: "Domain" },
         templateId: { type: Schema.Types.ObjectId, ref: "Template" },
         recipientListId: { type: Schema.Types.ObjectId, ref: "ContactList" },
         totalRecipients: { type: Number, default: 0 },

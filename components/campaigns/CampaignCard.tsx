@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreVertical, Mail, Calendar, Send, FileText, BarChart3, Clock } from "lucide-react";
+import { MoreVertical, Mail, Calendar, Send, FileText, BarChart3, Clock, Loader2 } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -8,7 +8,8 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
-import { Campaign } from "@/types";
+import { Campaign, ApiResponse } from "@/types";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface CampaignCardProps {
     campaign: Campaign;
@@ -19,20 +20,44 @@ interface CampaignCardProps {
 const STATUS_CONFIG = {
     DRAFT: { label: "Draft", color: "bg-gray-100 text-gray-600", icon: FileText },
     SCHEDULED: { label: "Scheduled", color: "bg-blue-50 text-blue-600", icon: Clock },
-    SENDING: { label: "Sending", color: "bg-purple-50 text-purple-600", icon: Send },
+    SENDING: { label: "Sending", color: "bg-purple-50 text-purple-600", icon: Loader2 },
     SENT: { label: "Sent", color: "bg-green-50 text-green-600", icon: Send },
     CANCELLED: { label: "Cancelled", color: "bg-red-50 text-red-600", icon: FileText },
 };
 
 export function CampaignCard({ campaign, onDelete, onDuplicate }: CampaignCardProps) {
+    const queryClient = useQueryClient();
     const status = STATUS_CONFIG[campaign.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.DRAFT;
     const StatusIcon = status.icon;
+
+    const sendMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch(`/api/campaigns/${campaign.id}/send`, { method: "POST" });
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || "Failed to send campaign");
+            }
+            return res.json();
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+            alert(`Campaign dispatched! We've started sending your emails to ${data.totalRecipients} recipients.`);
+        },
+        onError: (error: any) => {
+            alert(`Failed to send: ${error.message}`);
+        },
+    });
+
+    const isSending = campaign.status === 'SENDING';
+    const progress = campaign.totalRecipients > 0
+        ? Math.round((campaign.sentCount / campaign.totalRecipients) * 100)
+        : 0;
 
     return (
         <div className="group bg-white rounded-2xl border border-gray-100 p-5 hover:border-blue-200 hover:shadow-sm transition-all">
             <div className="flex items-start justify-between mb-4">
                 <div className={`w-10 h-10 ${status.color.split(' ')[0]} rounded-xl flex items-center justify-center transition-colors`}>
-                    <StatusIcon className={`w-5 h-5 ${status.color.split(' ')[1]}`} />
+                    <StatusIcon className={`w-5 h-5 ${status.color.split(' ')[1]} ${isSending ? 'animate-spin' : ''}`} />
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -92,13 +117,47 @@ export function CampaignCard({ campaign, onDelete, onDuplicate }: CampaignCardPr
                 )}
             </div>
 
+            {/* Progress Bar for Sending Status */}
+            {isSending && (
+                <div className="mb-6">
+                    <div className="flex justify-between items-center mb-1.5">
+                        <span className="text-[10px] font-bold text-purple-600 uppercase">Sending...</span>
+                        <span className="text-[10px] font-bold text-purple-600 uppercase">{progress}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-purple-100 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-purple-600 transition-all duration-500"
+                            style={{ width: `${progress}%` }}
+                        />
+                    </div>
+                </div>
+            )}
+
             <div className="flex gap-2">
                 <Link
-                    href={`/dashboard/campaigns/${campaign.id}/edit`}
+                    href={`/dashboard/campaigns/${campaign.id}${campaign.status === 'SENT' ? '/analytics' : '/edit'}`}
                     className="flex-1 inline-flex items-center justify-center gap-2 bg-gray-50 text-gray-700 text-sm font-medium py-2 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all"
                 >
                     {campaign.status === 'SENT' ? 'View Report' : 'Continue Editing'}
                 </Link>
+                {campaign.status === 'DRAFT' && (
+                    <button
+                        onClick={() => {
+                            if (confirm(`Send this campaign to ${campaign.totalRecipients || 'all'} recipients?`)) {
+                                sendMutation.mutate();
+                            }
+                        }}
+                        disabled={sendMutation.isPending}
+                        className="flex-[1.2] inline-flex items-center justify-center gap-2 bg-blue-600 text-white text-sm font-semibold py-2 rounded-xl hover:bg-blue-700 transition-all shadow-sm shadow-blue-200 disabled:opacity-50"
+                    >
+                        {sendMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Send className="w-4 h-4" />
+                        )}
+                        Send Now
+                    </button>
+                )}
                 {campaign.status === 'SENT' && (
                     <Link
                         href={`/dashboard/campaigns/${campaign.id}/analytics`}

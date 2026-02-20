@@ -55,8 +55,9 @@ Think of it as a **simplified, affordable alternative to Mailchimp** — built f
 ### 4. Campaign Sending
 - Send immediately or **schedule for later**
 - Select target contact list
+- Select **verified sending domain** (via SES)
 - Set sender name & reply-to address
-- Integration with sending services: **SendGrid / Amazon SES / Mailgun**
+- Integration with sending services: **Amazon SES** (recommended) / SendGrid / Mailgun
 - Batch sending to avoid spam filters
 
 ### 5. Analytics Dashboard
@@ -72,6 +73,7 @@ Think of it as a **simplified, affordable alternative to Mailchimp** — built f
 - Manage unsubscribed contacts (suppress from future sends)
 - Sender information footer (required by law)
 - Double opt-in option for new subscribers
+- **SES Domain Identity verification** (SPF, DKIM, DMARC)
 
 ---
 
@@ -164,6 +166,11 @@ campaignrecipients
 
 templates
   - _id, name, description, htmlContent, thumbnail, workspaceId (ref: workspaces), isGlobal, createdAt, updatedAt
+
+domains
+  - _id, domainName, workspaceId (ref: workspaces), verificationStatus (PENDING/VERIFIED/FAILED)
+  - verificationToken (TXT record), dkimTokens (CNAME records), spfRecord
+  - createdAt, updatedAt
 ```
 
 ---
@@ -292,11 +299,12 @@ Additional revenue streams:
 
 | Risk | Solution |
 |---|---|
-| Emails landing in spam | Use SendGrid/SES, warm up IPs, follow best practices |
+| Emails landing in spam | Use Amazon SES with proper **Domain Authentication (SPF, DKIM, DMARC)** |
 | Legal compliance issues | Always include unsubscribe + sender info |
 | Abuse (spam users) | Email verification, rate limits, abuse detection |
-| Scaling costs | Start with SES (very cheap at scale) |
+| Scaling costs | Amazon SES ($0.10 per 1000 emails) |
 | Competition from Mailchimp | Focus on simplicity + price + local market |
+| Domain Reputation | Monitor bounces/complaints, enforce domain verification |
 
 ---
 

@@ -1,0 +1,76 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { connectDB } from "@/lib/db";
+import { Campaign } from "@/models/Campaign";
+import { Contact } from "@/models/Contact";
+import { addEmailJob } from "@/lib/queue";
+
+export async function POST(
+    req: NextRequest,
+    { params }: { params: { id: string } }
+) {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session?.user?.workspaceId) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        await connectDB();
+
+        // 1. Fetch Campaign
+        const campaign = await Campaign.findOne({
+            _id: params.id,
+            workspaceId: session.user.workspaceId,
+        });
+
+        if (!campaign) {
+            return NextResponse.json({ success: false, error: "Campaign not found" }, { status: 404 });
+        }
+
+        if (campaign.status !== "DRAFT") {
+            return NextResponse.json({ success: false, error: "Campaign already sent or scheduled" }, { status: 400 });
+        }
+
+        if (!campaign.recipientListId) {
+            return NextResponse.json({ success: false, error: "Recipient list not selected" }, { status: 400 });
+        }
+
+        // 2. Fetch Recipients
+        const contacts = await Contact.find({
+            listId: campaign.recipientListId,
+            status: "ACTIVE", // Only send to active contacts
+        });
+
+        if (contacts.length === 0) {
+            return NextResponse.json({ success: false, error: "No active contacts in the selected list" }, { status: 400 });
+        }
+
+        // 3. Update Campaign Status
+        campaign.status = "SENDING";
+        campaign.totalRecipients = contacts.length;
+        campaign.sentAt = new Date();
+        await campaign.save();
+
+        // 4. Dispatch Jobs
+        const jobPromises = contacts.map((contact) =>
+            addEmailJob({
+                campaignId: campaign._id.toString(),
+                contactId: contact._id.toString(),
+                recipientEmail: contact.email,
+                recipientName: contact.firstName,
+            })
+        );
+
+        await Promise.all(jobPromises);
+
+        return NextResponse.json({
+            success: true,
+            message: `Dispatched ${contacts.length} emails to queue`,
+            totalRecipients: contacts.length
+        });
+    } catch (error) {
+        console.error("[CAMPAIGN_SEND]", error);
+        return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+    }
+}

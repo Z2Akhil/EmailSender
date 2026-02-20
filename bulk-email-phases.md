@@ -8,9 +8,9 @@
 |---|---|---|---|
 | Phase 1 | Foundation & Setup | Week 1–2 | ✅ Done |
 | Phase 2 | Contact Management | Week 3 | ✅ Done |
-| Phase 3 | Campaign Builder | Week 4–5 | 🔄 In Progress |
-| Phase 4 | Sending Engine | Week 6 | 🔲 Not Started |
-| Phase 5 | Analytics | Week 7 | 🔲 Not Started |
+| Phase 3 | Campaign Builder | Week 4–5 | ✅ Done |
+| Phase 4 | Sending Engine | Week 6 | ✅ Done |
+| Phase 5 | Analytics | Week 7 | 🔄 In Progress |
 | Phase 6 | Polish & Launch | Week 8 | 🔲 Not Started |
 
 ---
@@ -127,9 +127,14 @@
 - [ ] Campaign list page with status filters (draft, scheduled, sent)
 
 #### Preview & Testing
-- [ ] Desktop and mobile preview toggle
-- [ ] Send test email to own address before going live
-- [ ] Validate: subject line not empty, list selected, sender set
+- [x] Desktop and mobile preview toggle
+- [ ] Send test email to own address before going live (Polish)
+- [x] Validate: subject line not empty, list selected, sender set
+
+#### 💅 Polish Items (Post-MVP)
+- [ ] Implement block-based email editor (e.g., Unlayer or TipTap)
+- [ ] Real-time mobile/desktop preview sync
+- [ ] Personalization tag autocomplete in editor
 
 ### Deliverables
 - Users can build emails using pre-made or custom templates
@@ -144,10 +149,15 @@
 
 ### Tasks
 
-#### Email Provider Integration
-- [ ] Integrate SendGrid API (`@sendgrid/mail`)
-- [ ] Integrate Amazon SES as backup/alternative
-- [ ] Abstract sending logic into a unified `email.ts` service
+#### Email Provider & Domain Authentication
+- [ ] Integrate Amazon SES API (`@aws-sdk/client-ses`)
+- [ ] Implement Domain Verification flow:
+    - [ ] UI for adding domain (`dashboard/settings/domains`)
+    - [ ] Call SES `CreateEmailIdentity` on domain add
+    - [ ] Display TXT (verification) and CNAME (DKIM) records to user
+    - [ ] Background job to poll SES for verification status
+    - [ ] Enable sending only for `VERIFIED` domains
+- [ ] Abstract sending logic into a unified `email.ts` service (SES primary, SendGrid backup)
 - [ ] Allow users to connect their own SMTP in settings (optional)
 
 #### Background Job Queue
