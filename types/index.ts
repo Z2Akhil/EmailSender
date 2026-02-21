@@ -30,6 +30,17 @@ export interface ContactList {
     updatedAt: Date;
 }
 
+export interface Domain {
+    id: string;
+    domainName: string;
+    workspaceId: string;
+    verificationStatus: 'PENDING' | 'VERIFIED' | 'FAILED';
+    verificationToken?: string;
+    dkimTokens?: string[];
+    createdAt: string;
+    updatedAt: string;
+}
+
 // ─── Campaign Types ───────────────────────────────────────────────────────────
 
 export type CampaignStatus = "DRAFT" | "SCHEDULED" | "SENDING" | "SENT" | "CANCELLED";
@@ -56,6 +67,7 @@ export interface Campaign {
     scheduledAt?: Date | null;
     sentAt?: Date | null;
     workspaceId: string;
+    domainId?: string | null;
     templateId?: string | null;
     recipientListId?: string | null;
     totalRecipients: number;

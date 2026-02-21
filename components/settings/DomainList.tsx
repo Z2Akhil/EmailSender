@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Clock, AlertCircle, Copy, RefreshCw, ChevronDown, ChevronUp, Globe, Loader2, Trash2 } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Copy, RefreshCw, ChevronDown, ChevronUp, Globe, Loader2, Trash2, Info } from "lucide-react";
 
 interface Domain {
     _id: string;
     domainName: string;
     verificationStatus: 'PENDING' | 'VERIFIED' | 'FAILED';
     verificationToken?: string;
+    dkimTokens?: string[];
     createdAt: string;
 }
 
@@ -26,8 +27,8 @@ export function DomainList({ domains, onRefresh }: DomainListProps) {
 
     const copyToClipboard = (text: string, label: string) => {
         navigator.clipboard.writeText(text);
-        // Fallback if toast hook doesn't exist or is different
-        alert(`${label} copied to clipboard!`);
+        // Using a simple alert for now, in a real app would use a toast
+        console.log(`${label} copied!`);
     };
 
     const verifyStatus = async (id: string) => {
@@ -38,17 +39,11 @@ export function DomainList({ domains, onRefresh }: DomainListProps) {
 
             if (result.success) {
                 onRefresh();
-                if (result.status === "VERIFIED") {
-                    alert("Domain verified successfully!");
-                } else {
-                    alert("Domain still pending verification. Please ensure DNS records are correct.");
-                }
             } else {
                 throw new Error(result.error);
             }
         } catch (error) {
             console.error(error);
-            alert("Failed to verify status. Please try again later.");
         } finally {
             setIsRefreshing(null);
         }
@@ -73,7 +68,7 @@ export function DomainList({ domains, onRefresh }: DomainListProps) {
             {domains.map((domain) => (
                 <div
                     key={domain._id}
-                    className={`bg-white rounded-2xl border transition-all overflow-hidden ${expandedId === domain._id ? "border-blue-200 ring-4 ring-blue-50" : "border-gray-100"
+                    className={`bg-white rounded-2xl border transition-all overflow-hidden ${expandedId === domain._id ? "border-blue-200 ring-4 ring-blue-50/50" : "border-gray-100 shadow-sm"
                         }`}
                 >
                     <div
@@ -81,22 +76,22 @@ export function DomainList({ domains, onRefresh }: DomainListProps) {
                         onClick={() => toggleExpand(domain._id)}
                     >
                         <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${domain.verificationStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" :
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${domain.verificationStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" :
                                 domain.verificationStatus === "FAILED" ? "bg-red-50 text-red-600" :
                                     "bg-blue-50 text-blue-600"
                                 }`}>
-                                <Globe className="w-5 h-5" />
+                                <Globe className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="font-semibold text-gray-900">{domain.domainName}</h3>
-                                <p className="text-xs text-gray-400">Added on {new Date(domain.createdAt).toLocaleDateString()}</p>
+                                <h3 className="font-bold text-gray-900">{domain.domainName}</h3>
+                                <p className="text-xs text-gray-400 font-medium">Added on {new Date(domain.createdAt).toLocaleDateString()}</p>
                             </div>
                         </div>
 
                         <div className="flex items-center gap-3">
-                            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${domain.verificationStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-700" :
-                                domain.verificationStatus === "FAILED" ? "bg-red-50 text-red-700" :
-                                    "bg-amber-50 text-amber-700"
+                            <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-tight ${domain.verificationStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                                domain.verificationStatus === "FAILED" ? "bg-red-50 text-red-700 border border-red-100" :
+                                    "bg-amber-50 text-amber-700 border border-amber-100"
                                 }`}>
                                 {domain.verificationStatus === "VERIFIED" ? (
                                     <><CheckCircle2 className="w-3.5 h-3.5" /> Verified</>
@@ -111,46 +106,106 @@ export function DomainList({ domains, onRefresh }: DomainListProps) {
                     </div>
 
                     {expandedId === domain._id && (
-                        <div className="px-5 pb-6 border-t border-gray-50">
+                        <div className="px-5 pb-6 bg-white">
                             {domain.verificationStatus !== "VERIFIED" ? (
-                                <div className="mt-4 space-y-4">
-                                    <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4">
-                                        <p className="text-sm text-blue-800 font-medium mb-1">Verification Required</p>
-                                        <p className="text-xs text-blue-600">
-                                            Add the following TXT record to your DNS settings (GoDaddy, Cloudflare, etc.) to verify ownership.
-                                        </p>
+                                <div className="mt-2 space-y-6">
+                                    <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center flex-shrink-0">
+                                                <Info className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-blue-900 font-bold mb-1">DNS Records Required</p>
+                                                <p className="text-xs text-blue-700/80 leading-relaxed font-medium">
+                                                    Add these records to your DNS provider (Cloudflare, GoDaddy, etc.) to verify ownership and enable DKIM signing.
+                                                    Full verification requires all records to be active.
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5 ml-1">TXT Record</label>
-                                            <div className="flex gap-2">
-                                                <div className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-mono text-sm text-gray-600 overflow-x-auto whitespace-nowrap">
-                                                    _amazonses.{domain.domainName}
+                                    <div className="space-y-6">
+                                        {/* Identity Record */}
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between px-1">
+                                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Identity Record (TXT)</h4>
+                                                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md">Required</span>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Host / Name</p>
+                                                    <div className="flex gap-2">
+                                                        <div className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-mono text-[13px] text-gray-600 truncate">
+                                                            _amazonses
+                                                        </div>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); copyToClipboard(`_amazonses`, "Host"); }}
+                                                            className="p-3 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-all active:scale-95"
+                                                        >
+                                                            <Copy className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); copyToClipboard(`_amazonses.${domain.domainName}`, "Host"); }}
-                                                    className="p-3 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-colors"
-                                                >
-                                                    <Copy className="w-4 h-4" />
-                                                </button>
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Value / Points To</p>
+                                                    <div className="flex gap-2">
+                                                        <div className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-mono text-[13px] text-gray-600 truncate">
+                                                            {domain.verificationToken}
+                                                        </div>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); copyToClipboard(domain.verificationToken || "", "Value"); }}
+                                                            className="p-3 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-all active:scale-95"
+                                                        >
+                                                            <Copy className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
 
-                                        <div>
-                                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5 ml-1">Value / Points To</label>
-                                            <div className="flex gap-2">
-                                                <div className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-mono text-sm text-gray-600 overflow-x-auto whitespace-nowrap">
-                                                    {domain.verificationToken}
+                                        {/* DKIM Records */}
+                                        {domain.dkimTokens && domain.dkimTokens.length > 0 && (
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between px-1">
+                                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">DKIM Records (CNAME)</h4>
+                                                    <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded-md">Recommended</span>
                                                 </div>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); copyToClipboard(domain.verificationToken || "", "Value"); }}
-                                                    className="p-3 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-colors"
-                                                >
-                                                    <Copy className="w-4 h-4" />
-                                                </button>
+                                                <div className="space-y-3">
+                                                    {domain.dkimTokens.map((token, i) => (
+                                                        <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
+                                                            <div>
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Host</p>
+                                                                <div className="flex gap-2 overflow-hidden">
+                                                                    <div className="flex-1 font-mono text-[12px] text-gray-600 truncate">
+                                                                        {token}._domainkey
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); copyToClipboard(`${token}._domainkey`, "Host"); }}
+                                                                        className="text-gray-400 hover:text-blue-600"
+                                                                    >
+                                                                        <Copy className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Points To</p>
+                                                                <div className="flex gap-2 overflow-hidden">
+                                                                    <div className="flex-1 font-mono text-[12px] text-gray-600 truncate">
+                                                                        {token}.dkim.amazonses.com
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); copyToClipboard(`${token}.dkim.amazonses.com`, "Value"); }}
+                                                                        className="text-gray-400 hover:text-blue-600"
+                                                                    >
+                                                                        <Copy className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
 
                                     <div className="flex items-center justify-between pt-4">

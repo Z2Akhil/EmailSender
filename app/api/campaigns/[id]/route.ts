@@ -14,6 +14,7 @@ const campaignUpdateSchema = z.object({
     templateId: z.string().optional(),
     htmlContent: z.string().optional(),
     recipientListId: z.string().optional(),
+    domainId: z.string().optional(),
     status: z.enum(["DRAFT", "SCHEDULED", "SENDING", "SENT", "ARCHIVED"]).optional(),
     scheduledAt: z.string().datetime().nullable().optional(),
 });

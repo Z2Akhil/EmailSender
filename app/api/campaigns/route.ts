@@ -12,6 +12,7 @@ const campaignSchema = z.object({
     fromEmail: z.string().email("Invalid from email"),
     replyTo: z.string().email("Invalid reply-to email").optional().or(z.literal("")),
     templateId: z.string().optional(),
+    domainId: z.string().optional(),
     htmlContent: z.string().min(1, "Content is required"),
     recipientListId: z.string().min(1, "Recipient list is required"),
 });

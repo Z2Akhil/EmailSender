@@ -66,13 +66,17 @@ export async function POST(req: NextRequest) {
         }
 
         // Call SES to start verification
-        const verificationToken = await requestDomainVerification(result.data.domainName);
+        const [verificationToken, dkimTokens] = await Promise.all([
+            requestDomainVerification(result.data.domainName),
+            import("@/lib/email-service").then(m => m.getDomainDkimTokens(result.data.domainName))
+        ]);
 
         const newDomain = await Domain.create({
             domainName: result.data.domainName,
             workspaceId,
             verificationStatus: "PENDING",
             verificationToken,
+            dkimTokens,
         });
 
         return NextResponse.json({ success: true, data: newDomain }, { status: 201 });

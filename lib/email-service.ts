@@ -1,5 +1,11 @@
 import sgMail from "@sendgrid/mail";
-import { SESClient, VerifyDomainIdentityCommand, GetIdentityVerificationAttributesCommand } from "@aws-sdk/client-ses";
+import {
+    SESClient,
+    VerifyDomainIdentityCommand,
+    GetIdentityVerificationAttributesCommand,
+    VerifyDomainDkimCommand,
+    GetIdentityDkimAttributesCommand
+} from "@aws-sdk/client-ses";
 import nodemailer from "nodemailer";
 
 if (process.env.SENDGRID_API_KEY) {
@@ -138,6 +144,24 @@ export const getDomainVerificationStatus = async (domain: string) => {
     const response = await sesClient.send(command);
     const attributes = response.VerificationAttributes?.[domain];
     return attributes?.VerificationStatus || "NOT_FOUND";
+};
+
+export const getDomainDkimTokens = async (domain: string) => {
+    const command = new VerifyDomainDkimCommand({ Domain: domain });
+    const response = await sesClient.send(command);
+    return response.DkimTokens; // Array of CNAME values
+};
+
+export const getDomainDkimStatus = async (domain: string) => {
+    const command = new GetIdentityDkimAttributesCommand({
+        Identities: [domain],
+    });
+    const response = await sesClient.send(command);
+    const attributes = response.DkimAttributes?.[domain];
+    return {
+        tokens: attributes?.DkimTokens || [],
+        status: attributes?.DkimVerificationStatus || "NOT_STARTED",
+    };
 };
 
 export const injectComplianceFooter = (html: string, unsubscribeUrl: string) => {

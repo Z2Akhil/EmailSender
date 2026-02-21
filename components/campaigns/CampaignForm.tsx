@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Campaign, Template, ContactList, ApiResponse } from "@/types";
+import { Campaign, Template, ContactList, Domain, ApiResponse } from "@/types";
 import { TemplateCard } from "@/components/templates/TemplateCard";
 
 type Step = "SETTINGS" | "TEMPLATE" | "CONTENT" | "RECIPIENTS" | "REVIEW";
@@ -44,6 +44,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         htmlContent: initialData?.htmlContent || "",
         textContent: initialData?.textContent || "",
         recipientListId: initialData?.recipientListId || "",
+        domainId: initialData?.domainId || "",
     });
 
     const urlTemplateId = searchParams.get("templateId");
@@ -64,6 +65,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                 htmlContent: initialData.htmlContent || "",
                 textContent: initialData.textContent || "",
                 recipientListId: initialData.recipientListId || "",
+                domainId: initialData.domainId || "",
             });
         }
     }, [initialData]);
@@ -117,7 +119,17 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         enabled: currentStep === "RECIPIENTS",
     });
 
+    const { data: domainsData } = useQuery<ApiResponse<Domain[]>>({
+        queryKey: ["domains"],
+        queryFn: async () => {
+            const res = await fetch("/api/domains");
+            if (!res.ok) throw new Error("Failed to fetch domains");
+            return res.json();
+        },
+    });
+
     const templates = templatesData?.data || [];
+    const verifiedDomains = domainsData?.data?.filter(d => d.verificationStatus === "VERIFIED") || [];
     const filteredTemplates = templates.filter(t =>
         t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
         t.description?.toLowerCase().includes(templateSearch.toLowerCase())
@@ -293,7 +305,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-sm font-semibold text-gray-700">From Name</label>
                                     <input
@@ -305,15 +317,62 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-gray-700">From Email</label>
-                                    <input
-                                        type="email"
-                                        placeholder="hello@example.com"
-                                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                        value={formData.fromEmail}
-                                        onChange={e => setFormData({ ...formData, fromEmail: e.target.value })}
-                                    />
+                                    <label className="text-sm font-semibold text-gray-700">From Email Address</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="hello"
+                                            className="w-1/2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all text-right"
+                                            value={formData.fromEmail.split("@")[0]}
+                                            onChange={e => {
+                                                const prefix = e.target.value;
+                                                const domain = formData.fromEmail.split("@")[1] || (verifiedDomains[0]?.domainName || "");
+                                                setFormData({ ...formData, fromEmail: `${prefix}@${domain}` });
+                                            }}
+                                        />
+                                        <div className="flex items-center text-gray-400">@</div>
+                                        <select
+                                            className="w-1/2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                            value={formData.domainId || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?.id || ""}
+                                            onChange={e => {
+                                                const domainId = e.target.value;
+                                                const domain = verifiedDomains.find(d => d.id === domainId);
+                                                if (domain) {
+                                                    const prefix = formData.fromEmail.split("@")[0] || "hello";
+                                                    setFormData({
+                                                        ...formData,
+                                                        domainId,
+                                                        fromEmail: `${prefix}@${domain.domainName}`
+                                                    });
+                                                }
+                                            }}
+                                        >
+                                            <option value="" disabled>Select Domain</option>
+                                            {verifiedDomains.map(d => (
+                                                <option key={d.id} value={d.id}>{d.domainName}</option>
+                                            ))}
+                                            {verifiedDomains.length === 0 && (
+                                                <option value="" disabled>No verified domains</option>
+                                            )}
+                                        </select>
+                                    </div>
+                                    {verifiedDomains.length === 0 && (
+                                        <p className="text-[11px] text-amber-600 flex items-center gap-1 mt-1">
+                                            <Plus className="w-3 h-3" />
+                                            No verified domains found. <Link href="/dashboard/settings/domains" className="underline">Add one in settings</Link>.
+                                        </p>
+                                    )}
                                 </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700">Reply-to Email (Optional)</label>
+                                <input
+                                    type="email"
+                                    placeholder="support@yourbrand.com"
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                    value={formData.replyTo}
+                                    onChange={e => setFormData({ ...formData, replyTo: e.target.value })}
+                                />
                             </div>
                         </div>
                     </div>

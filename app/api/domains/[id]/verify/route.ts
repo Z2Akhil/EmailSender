@@ -29,19 +29,28 @@ export async function GET(
         }
 
         // Poll SES for latest status
-        const sesStatus = await getDomainVerificationStatus(domain.domainName);
+        const [identityStatus, dkimInfo] = await Promise.all([
+            getDomainVerificationStatus(domain.domainName),
+            import("@/lib/email-service").then(m => m.getDomainDkimStatus(domain.domainName))
+        ]);
 
         // Map SES status to our local status
         let localStatus: 'PENDING' | 'VERIFIED' | 'FAILED' = "PENDING";
-        if (sesStatus === "Success") {
+
+        // Both identity AND DKIM must be successful for full verification in our app 
+        // (optional, but encouraged for deliverability)
+        if (identityStatus === "Success" && dkimInfo.status === "Success") {
             localStatus = "VERIFIED";
-        } else if (sesStatus === "Failed") {
+        } else if (identityStatus === "Failed" || dkimInfo.status === "Failed") {
             localStatus = "FAILED";
         }
 
-        // Update local DB if status changed
-        if (domain.verificationStatus !== localStatus) {
+        // Update local DB if status or tokens changed
+        if (domain.verificationStatus !== localStatus || domain.dkimTokens?.length === 0) {
             domain.verificationStatus = localStatus;
+            if (dkimInfo.tokens.length > 0) {
+                domain.dkimTokens = dkimInfo.tokens;
+            }
             await domain.save();
         }
 
