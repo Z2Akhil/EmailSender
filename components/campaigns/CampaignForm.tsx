@@ -175,7 +175,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
     const selectList = (list: ContactList) => {
         setFormData({
             ...formData,
-            recipientListId: list.id,
+            recipientListId: list._id || list.id,
         });
         handleNext();
     };
@@ -333,10 +333,10 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                         <div className="flex items-center text-gray-400">@</div>
                                         <select
                                             className="w-1/2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                            value={formData.domainId || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?.id || ""}
+                                            value={formData.domainId || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?._id || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?.id || ""}
                                             onChange={e => {
                                                 const domainId = e.target.value;
-                                                const domain = verifiedDomains.find(d => d.id === domainId);
+                                                const domain = verifiedDomains.find(d => d._id === domainId || d.id === domainId);
                                                 if (domain) {
                                                     const prefix = formData.fromEmail.split("@")[0] || "hello";
                                                     setFormData({
@@ -349,7 +349,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                         >
                                             <option value="" disabled>Select Domain</option>
                                             {verifiedDomains.map(d => (
-                                                <option key={d.id} value={d.id}>{d.domainName}</option>
+                                                <option key={d._id || d.id} value={d._id || d.id}>{d.domainName}</option>
                                             ))}
                                             {verifiedDomains.length === 0 && (
                                                 <option value="" disabled>No verified domains</option>
@@ -513,19 +513,19 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                     <button
                                         key={list.id}
                                         onClick={() => selectList(list)}
-                                        className={`group relative text-left p-6 rounded-2xl border transition-all ${formData.recipientListId === list.id
+                                        className={`group relative text-left p-6 rounded-2xl border transition-all ${formData.recipientListId === (list._id || list.id)
                                             ? "border-blue-600 bg-blue-50/10 ring-4 ring-blue-50"
                                             : "border-gray-100 hover:border-blue-200 hover:bg-gray-50/30"
                                             }`}
                                     >
-                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-colors ${formData.recipientListId === list.id ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500"
+                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-colors ${formData.recipientListId === (list._id || list.id) ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500"
                                             }`}>
                                             <Users className="w-6 h-6" />
                                         </div>
                                         <h3 className="font-bold text-gray-900 truncate">{list.name}</h3>
                                         <p className="text-sm text-gray-500 mt-1">{list.contactCount} recipients</p>
 
-                                        {formData.recipientListId === list.id && (
+                                        {formData.recipientListId === (list._id || list.id) && (
                                             <div className="absolute top-4 right-4 text-blue-600">
                                                 <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center">
                                                     <Check className="w-4 h-4" />
@@ -626,10 +626,10 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-gray-900">
-                                                {lists.find(l => l.id === formData.recipientListId)?.name || "Unknown List"}
+                                                {lists.find(l => (l._id || l.id) === formData.recipientListId)?.name || "Unknown List"}
                                             </p>
                                             <p className="text-xs text-gray-500">
-                                                {lists.find(l => l.id === formData.recipientListId)?.contactCount || 0} recipients
+                                                {lists.find(l => (l._id || l.id) === formData.recipientListId)?.contactCount || 0} recipients
                                             </p>
                                         </div>
                                     </div>

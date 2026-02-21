@@ -23,6 +23,7 @@ export interface Contact {
 
 export interface ContactList {
     id: string;
+    _id?: string;
     name: string;
     workspaceId: string;
     contactCount: number;
@@ -32,6 +33,7 @@ export interface ContactList {
 
 export interface Domain {
     id: string;
+    _id?: string;
     domainName: string;
     workspaceId: string;
     verificationStatus: 'PENDING' | 'VERIFIED' | 'FAILED';

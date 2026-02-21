@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
+import { ContactList } from "@/models/Contact";
 import { z } from "zod";
 
 const campaignSchema = z.object({
@@ -12,7 +13,7 @@ const campaignSchema = z.object({
     fromEmail: z.string().email("Invalid from email"),
     replyTo: z.string().email("Invalid reply-to email").optional().or(z.literal("")),
     templateId: z.string().optional(),
-    domainId: z.string().optional(),
+    domainId: z.string().optional().or(z.literal("")),
     htmlContent: z.string().min(1, "Content is required"),
     recipientListId: z.string().min(1, "Recipient list is required"),
 });
@@ -49,11 +50,19 @@ export async function POST(req: NextRequest) {
 
         await connectDB();
 
+        // Handle empty string for domainId by deleting it so Mongoose doesn't throw a CastError
+        if (validated.domainId === "") {
+            delete validated.domainId;
+        }
+
+        // Fetch the list to get the actual contact count
+        const list = await ContactList.findById(validated.recipientListId);
+
         const campaign = await Campaign.create({
             ...validated,
             workspaceId: session.user.workspaceId,
             status: "DRAFT",
-            totalRecipients: 0, // In a real app, we'd fetch the count from the list
+            totalRecipients: list?.contactCount || 0,
         });
 
         return NextResponse.json({ success: true, data: campaign });

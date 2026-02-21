@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
+import { ContactList } from "@/models/Contact";
 import { z } from "zod";
 
 const campaignUpdateSchema = z.object({
@@ -14,7 +15,7 @@ const campaignUpdateSchema = z.object({
     templateId: z.string().optional(),
     htmlContent: z.string().optional(),
     recipientListId: z.string().optional(),
-    domainId: z.string().optional(),
+    domainId: z.string().optional().or(z.literal("")),
     status: z.enum(["DRAFT", "SCHEDULED", "SENDING", "SENT", "ARCHIVED"]).optional(),
     scheduledAt: z.string().datetime().nullable().optional(),
 });
@@ -63,6 +64,21 @@ export async function PATCH(
         const validated = campaignUpdateSchema.parse(body);
 
         await connectDB();
+
+        // Handle empty string for domainId by unsetting it 
+        if (validated.domainId === "") {
+            delete validated.domainId;
+            // Explicitly unset it in DB if they are removing the domain
+            (validated as any).$unset = { domainId: "" };
+        }
+
+        // If recipient list changed, update the total recipients count
+        if (validated.recipientListId) {
+            const list = await ContactList.findById(validated.recipientListId);
+            if (list) {
+                (validated as any).totalRecipients = list.contactCount;
+            }
+        }
 
         const campaign = await Campaign.findOneAndUpdate(
             { _id: id, workspaceId: session.user.workspaceId },
