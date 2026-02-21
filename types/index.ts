@@ -79,6 +79,7 @@ export interface Campaign {
     clickCount: number;
     bounceCount: number;
     unsubscribeCount: number;
+    failedCount: number;
     createdAt: Date;
     updatedAt: Date;
 }

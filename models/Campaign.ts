@@ -23,6 +23,7 @@ export interface ICampaign extends Document {
     clickCount: number;
     bounceCount: number;
     unsubscribeCount: number;
+    failedCount: number;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -67,6 +68,7 @@ const CampaignSchema = new Schema<ICampaign>(
         clickCount: { type: Number, default: 0 },
         bounceCount: { type: Number, default: 0 },
         unsubscribeCount: { type: Number, default: 0 },
+        failedCount: { type: Number, default: 0 },
     },
     {
         timestamps: true,

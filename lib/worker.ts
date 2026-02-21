@@ -54,19 +54,16 @@ export const initWorker = () => {
                 html = html.replace(/{{email}}/g, recipientEmail);
 
                 // 5. Inject Open Tracking Pixel
-                const openTrackingUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/track/open/${recipientId}`;
+                const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://scoreit.in";
+                const openTrackingUrl = `${baseUrl}/api/track/open/${recipientId}`;
                 html = html.replace("</body>", `<img src="${openTrackingUrl}" width="1" height="1" style="display:none;" /></body>`);
                 if (!html.includes("</body>")) {
                     html += `<img src="${openTrackingUrl}" width="1" height="1" style="display:none;" />`;
                 }
 
-                // 6. Wrap Links for Click Tracking
-                const clickTrackingBaseUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/track/click`;
-                html = html.replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"/gi, (match, url) => {
-                    // Skip if it's already a tracking URL or an anchor/mailto/tel
-                    if (url.startsWith(clickTrackingBaseUrl) || url.startsWith("#") || url.startsWith("mailto:") || url.startsWith("tel:")) {
-                        return match;
-                    }
+                // 6. Inject Click Tracking (Wrap all links)
+                const clickTrackingBaseUrl = `${baseUrl}/api/track/click`;
+                html = html.replace(/href="([^"]*)"/g, (match, url) => {
                     // Skip unsubscribe links (they have their own tracking logic usually, or should be direct)
                     if (url.includes("/unsubscribe")) {
                         return match;
@@ -77,7 +74,7 @@ export const initWorker = () => {
                 });
 
                 // 7. Inject Compliance Footer
-                const unsubscribeUrl = `${process.env.NEXT_PUBLIC_APP_URL}/unsubscribe?email=${encodeURIComponent(recipientEmail)}&cid=${campaignId}`;
+                const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}&cid=${campaignId}`;
                 html = injectComplianceFooter(html, unsubscribeUrl);
 
                 // 8. Fetch Workspace for SMTP settings
@@ -118,9 +115,13 @@ export const initWorker = () => {
                     updatedAt: new Date()
                 });
 
-                await Campaign.findByIdAndUpdate(campaignId, {
+                const updatedCampaign = await Campaign.findByIdAndUpdate(campaignId, {
                     $inc: { sentCount: 1 }
-                });
+                }, { new: true });
+
+                if (updatedCampaign && (updatedCampaign.sentCount + updatedCampaign.failedCount >= updatedCampaign.totalRecipients)) {
+                    await Campaign.findByIdAndUpdate(campaignId, { status: "SENT" });
+                }
 
                 return { success: true, messageId: result.messageId };
             } catch (error: any) {
@@ -135,6 +136,14 @@ export const initWorker = () => {
                     },
                     { upsert: true }
                 );
+
+                const updatedCampaign = await Campaign.findByIdAndUpdate(campaignId, {
+                    $inc: { failedCount: 1 }
+                }, { new: true });
+
+                if (updatedCampaign && (updatedCampaign.sentCount + updatedCampaign.failedCount >= updatedCampaign.totalRecipients)) {
+                    await Campaign.findByIdAndUpdate(campaignId, { status: "SENT" });
+                }
 
                 throw error; // Let BullMQ handle retry
             }

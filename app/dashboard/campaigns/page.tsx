@@ -26,6 +26,10 @@ export default function CampaignsPage() {
             if (!res.ok) throw new Error("Failed to fetch campaigns");
             return res.json();
         },
+        refetchInterval: (query) => {
+            const data = query.state.data?.data;
+            return data?.some((c: Campaign) => c.status === "SENDING") ? 3000 : false;
+        }
     });
 
     const deleteMutation = useMutation({
@@ -58,6 +62,8 @@ export default function CampaignsPage() {
                     templateId: source.templateId,
                     htmlContent: source.htmlContent,
                     recipientListId: source.recipientListId,
+                    provider: source.provider,
+                    domainId: source.domainId,
                 }),
             });
             if (!createRes.ok) throw new Error("Failed to duplicate campaign");
