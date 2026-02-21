@@ -149,6 +149,7 @@ export default function TemplatesPage() {
                         <TemplateCard
                             key={template.id}
                             template={template}
+                            layout={viewMode}
                             onSelect={handleSelect}
                             onPreview={() => window.open(`/api/templates/${template.id}/preview`, '_blank')}
                         />

@@ -8,12 +8,76 @@ interface TemplateCardProps {
     onSelect?: (template: Template) => void;
     onPreview?: (template: Template) => void;
     showActions?: boolean;
+    layout?: "grid" | "list";
 }
 
-export function TemplateCard({ template, onSelect, onPreview, showActions = true }: TemplateCardProps) {
+export function TemplateCard({
+    template,
+    onSelect,
+    onPreview,
+    showActions = true,
+    layout = "grid"
+}: TemplateCardProps) {
+    if (layout === "list") {
+        return (
+            <div className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:border-blue-200 hover:shadow-sm transition-all flex items-center p-4 gap-4">
+                <div className="w-20 h-24 bg-gray-50 rounded-xl relative overflow-hidden flex-shrink-0">
+                    {template.thumbnail ? (
+                        <img
+                            src={template.thumbnail}
+                            alt={template.name}
+                            className="w-full h-full object-cover"
+                        />
+                    ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <Eye className="w-5 h-5 text-gray-300" />
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-gray-900 font-semibold truncate" title={template.name}>
+                            {template.name}
+                        </h3>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${template.isGlobal ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
+                            }`}>
+                            {template.isGlobal ? "Official" : "Mine"}
+                        </span>
+                    </div>
+                    {template.description && (
+                        <p className="text-gray-500 text-xs line-clamp-1">
+                            {template.description}
+                        </p>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    {onPreview && (
+                        <button
+                            onClick={() => onPreview(template)}
+                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                            title="Preview"
+                        >
+                            <Eye className="w-5 h-5" />
+                        </button>
+                    )}
+                    {onSelect && (
+                        <button
+                            onClick={() => onSelect(template)}
+                            className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+                        >
+                            Select
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:border-blue-200 hover:shadow-sm transition-all flex flex-col">
-            {/* Thumbnail Placeholder */}
+        <div className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:border-blue-200 hover:shadow-sm transition-all flex flex-col h-full">
+            {/* Thumbnail Placeholder or Iframe Preview */}
             <div className="aspect-[4/5] bg-gray-50 relative overflow-hidden group-hover:bg-blue-50/30 transition-colors">
                 {template.thumbnail ? (
                     <img
@@ -22,16 +86,27 @@ export function TemplateCard({ template, onSelect, onPreview, showActions = true
                         className="w-full h-full object-cover"
                     />
                 ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center mb-3">
-                            <Eye className="w-6 h-6 text-gray-300 group-hover:text-blue-400 transition-colors" />
+                    <div className="absolute inset-0 w-full h-full">
+                        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-0 opacity-20">
+                            <Eye className="w-12 h-12 text-gray-300" />
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mt-2">Preview Loading...</p>
                         </div>
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">No Preview</p>
+                        {/* Iframe Preview */}
+                        <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none origin-top-left" style={{ transform: 'scale(0.5)', width: '200%', height: '200%' }}>
+                            <iframe
+                                src={`/api/templates/${template.id}/preview`}
+                                className="w-full h-full border-none"
+                                title={template.name}
+                                scrolling="no"
+                            />
+                        </div>
+                        {/* Overlay to catch clicks and prevent iframe interaction */}
+                        <div className="absolute inset-0 z-10" />
                     </div>
                 )}
 
                 {/* Hover Overlay */}
-                <div className="absolute inset-0 bg-gray-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                <div className="absolute inset-0 bg-gray-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 z-20">
                     {onPreview && (
                         <button
                             onClick={() => onPreview(template)}
@@ -56,30 +131,51 @@ export function TemplateCard({ template, onSelect, onPreview, showActions = true
             {/* Info */}
             <div className="p-4 flex-1 flex flex-col">
                 <div className="mb-3">
-                    <h3 className="text-gray-900 font-semibold truncate" title={template.name}>
-                        {template.name}
-                    </h3>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                        <h3 className="text-gray-900 font-semibold truncate flex-1" title={template.name}>
+                            {template.name}
+                        </h3>
+                        {onPreview && (
+                            <button
+                                onClick={() => onPreview(template)}
+                                className="sm:hidden p-1.5 text-gray-400 hover:text-blue-600 rounded-lg"
+                            >
+                                <Eye className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
                     {template.description && (
-                        <p className="text-gray-500 text-xs mt-1 line-clamp-2">
+                        <p className="text-gray-500 text-xs line-clamp-2">
                             {template.description}
                         </p>
                     )}
                 </div>
 
-                {showActions && (
-                    <div className="mt-auto pt-3 border-t border-gray-50 flex items-center justify-between">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${template.isGlobal ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
-                            }`}>
-                            {template.isGlobal ? "Official" : "My Template"}
-                        </span>
+                <div className="mt-auto pt-3 border-t border-gray-50 flex items-center justify-between">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${template.isGlobal ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
+                        }`}>
+                        {template.isGlobal ? "Official" : "My Template"}
+                    </span>
 
-                        <div className="flex items-center gap-1">
-                            <button className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
-                                <Copy className="w-4 h-4" />
+                    <div className="flex items-center gap-2">
+                        {onPreview && (
+                            <button
+                                onClick={() => onPreview(template)}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                title="Open Preview"
+                            >
+                                <Eye className="w-4 h-4" />
                             </button>
-                        </div>
+                        )}
+                        <button
+                            onClick={() => onSelect?.(template)}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            title="Select"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </button>
                     </div>
-                )}
+                </div>
             </div>
         </div>
     );

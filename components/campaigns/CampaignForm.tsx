@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     ArrowLeft, Check, ChevronRight, Settings, Layout,
-    FileText, Users, Send, Loader2, Search, Plus
+    FileText, Users, Send, Loader2, Search, Plus, LayoutGrid, List
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -50,6 +50,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
 
     const [templateSearch, setTemplateSearch] = useState("");
     const [listSearch, setListSearch] = useState("");
+    const [templateViewMode, setTemplateViewMode] = useState<"grid" | "list">("grid");
 
     useEffect(() => {
         if (initialData) {
@@ -326,24 +327,46 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                 <p className="text-gray-500 text-sm mt-1">Choose a layout to start with</p>
                             </div>
 
-                            <div className="relative w-full sm:w-64">
-                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Search templates..."
-                                    value={templateSearch}
-                                    onChange={(e) => setTemplateSearch(e.target.value)}
-                                    className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all shadow-sm"
-                                />
+                            <div className="flex items-center gap-3 w-full sm:w-auto">
+                                <div className="relative flex-1 sm:w-64">
+                                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search templates..."
+                                        value={templateSearch}
+                                        onChange={(e) => setTemplateSearch(e.target.value)}
+                                        className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all shadow-sm"
+                                    />
+                                </div>
+
+                                <div className="hidden sm:flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+                                    <button
+                                        type="button"
+                                        onClick={() => setTemplateViewMode("grid")}
+                                        className={`p-1.5 rounded-lg transition-all ${templateViewMode === "grid" ? "bg-white text-blue-600 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                                    >
+                                        <LayoutGrid className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setTemplateViewMode("list")}
+                                        className={`p-1.5 rounded-lg transition-all ${templateViewMode === "list" ? "bg-white text-blue-600 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                                    >
+                                        <List className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
                         {isLoadingTemplates ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {[...Array(6)].map((_, i) => (
-                                    <div key={i} className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-pulse">
-                                        <div className="aspect-[4/5] bg-gray-50" />
-                                        <div className="p-4 space-y-3">
+                            <div className={templateViewMode === "grid"
+                                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+                                : "flex flex-col gap-4"
+                            }>
+                                {[...Array(templateViewMode === "grid" ? 6 : 4)].map((_, i) => (
+                                    <div key={i} className={`bg-white rounded-2xl border border-gray-100 overflow-hidden animate-pulse ${templateViewMode === "list" ? "flex items-center p-4 gap-4" : ""}`}>
+                                        <div className={`${templateViewMode === "grid" ? "aspect-[4/5]" : "w-20 h-24"} bg-gray-50 rounded-xl`} />
+                                        <div className={`p-4 space-y-3 flex-1`}>
                                             <div className="h-4 bg-gray-100 rounded-full w-2/3" />
                                             <div className="h-3 bg-gray-50 rounded-full w-full" />
                                         </div>
@@ -351,21 +374,27 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                 ))}
                             </div>
                         ) : filteredTemplates.length > 0 ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                <button
-                                    onClick={() => handleNext()}
-                                    className="group aspect-[4/5] bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center p-6 text-center hover:border-blue-300 hover:bg-blue-50/30 transition-all"
-                                >
-                                    <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center mb-3 text-gray-400 group-hover:text-blue-500 transition-colors">
-                                        <Plus className="w-6 h-6" />
-                                    </div>
-                                    <span className="text-sm font-bold text-gray-900">Start from Scratch</span>
-                                    <p className="text-xs text-gray-500 mt-1">Blank canvas for your creative ideas</p>
-                                </button>
+                            <div className={templateViewMode === "grid"
+                                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+                                : "flex flex-col gap-4"
+                            }>
+                                {templateViewMode === "grid" && (
+                                    <button
+                                        onClick={() => handleNext()}
+                                        className="group aspect-[4/5] bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center p-6 text-center hover:border-blue-300 hover:bg-blue-50/30 transition-all"
+                                    >
+                                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center mb-3 text-gray-400 group-hover:text-blue-500 transition-colors">
+                                            <Plus className="w-6 h-6" />
+                                        </div>
+                                        <span className="text-sm font-bold text-gray-900">Start from Scratch</span>
+                                        <p className="text-xs text-gray-500 mt-1">Blank canvas for your creative ideas</p>
+                                    </button>
+                                )}
                                 {filteredTemplates.map((t) => (
                                     <TemplateCard
                                         key={t.id}
                                         template={t}
+                                        layout={templateViewMode}
                                         onSelect={selectTemplate}
                                         onPreview={() => window.open(`/api/templates/${t.id}/preview`, '_blank')}
                                     />
