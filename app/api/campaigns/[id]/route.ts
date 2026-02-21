@@ -12,6 +12,7 @@ const campaignUpdateSchema = z.object({
     fromName: z.string().min(1).optional(),
     fromEmail: z.string().email().optional(),
     replyTo: z.string().email().optional().or(z.literal("")),
+    provider: z.enum(["SES", "SMTP"]).optional(),
     templateId: z.string().optional(),
     htmlContent: z.string().optional(),
     recipientListId: z.string().optional(),

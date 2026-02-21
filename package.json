@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "worker": "npx tsx start-worker.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.1",

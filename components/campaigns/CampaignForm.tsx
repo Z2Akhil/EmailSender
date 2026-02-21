@@ -45,6 +45,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         textContent: initialData?.textContent || "",
         recipientListId: initialData?.recipientListId || "",
         domainId: initialData?.domainId || "",
+        provider: (initialData as any)?.provider || "SES",
     });
 
     const urlTemplateId = searchParams.get("templateId");
@@ -66,6 +67,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                 textContent: initialData.textContent || "",
                 recipientListId: initialData.recipientListId || "",
                 domainId: initialData.domainId || "",
+                provider: (initialData as any).provider || "SES"
             });
         }
     }, [initialData]);
@@ -128,8 +130,18 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         },
     });
 
+    const { data: smtpData } = useQuery<ApiResponse<any>>({
+        queryKey: ["smtp"],
+        queryFn: async () => {
+            const res = await fetch("/api/settings/smtp");
+            if (!res.ok) throw new Error("Failed to fetch SMTP settings");
+            return res.json();
+        },
+    });
+
     const templates = templatesData?.data || [];
     const verifiedDomains = domainsData?.data?.filter(d => d.verificationStatus === "VERIFIED") || [];
+    const isSmtpConfigured = !!smtpData?.data?.smtpHost;
     const filteredTemplates = templates.filter(t =>
         t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
         t.description?.toLowerCase().includes(templateSearch.toLowerCase())
@@ -305,6 +317,35 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                 />
                             </div>
 
+                            {(verifiedDomains.length > 0 && isSmtpConfigured) && (
+                                <div className="space-y-2">
+                                    <label className="text-sm font-semibold text-gray-700">Email Provider</label>
+                                    <div className="flex bg-gray-50 p-1 rounded-xl w-fit border border-gray-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, provider: "SES", domainId: verifiedDomains[0]?._id || verifiedDomains[0]?.id || "" })}
+                                            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${formData.provider === "SES" ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"
+                                                }`}
+                                        >
+                                            Amazon SES
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({
+                                                ...formData,
+                                                provider: "SMTP",
+                                                domainId: "",
+                                                fromEmail: smtpData?.data?.smtpUser || formData.fromEmail
+                                            })}
+                                            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${formData.provider === "SMTP" ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"
+                                                }`}
+                                        >
+                                            Custom SMTP
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-sm font-semibold text-gray-700">From Name</label>
@@ -318,49 +359,61 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-semibold text-gray-700">From Email Address</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            placeholder="hello"
-                                            className="w-1/2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all text-right"
-                                            value={formData.fromEmail.split("@")[0]}
-                                            onChange={e => {
-                                                const prefix = e.target.value;
-                                                const domain = formData.fromEmail.split("@")[1] || (verifiedDomains[0]?.domainName || "");
-                                                setFormData({ ...formData, fromEmail: `${prefix}@${domain}` });
-                                            }}
-                                        />
-                                        <div className="flex items-center text-gray-400">@</div>
-                                        <select
-                                            className="w-1/2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                            value={formData.domainId || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?._id || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?.id || ""}
-                                            onChange={e => {
-                                                const domainId = e.target.value;
-                                                const domain = verifiedDomains.find(d => d._id === domainId || d.id === domainId);
-                                                if (domain) {
-                                                    const prefix = formData.fromEmail.split("@")[0] || "hello";
-                                                    setFormData({
-                                                        ...formData,
-                                                        domainId,
-                                                        fromEmail: `${prefix}@${domain.domainName}`
-                                                    });
-                                                }
-                                            }}
-                                        >
-                                            <option value="" disabled>Select Domain</option>
-                                            {verifiedDomains.map(d => (
-                                                <option key={d._id || d.id} value={d._id || d.id}>{d.domainName}</option>
-                                            ))}
+                                    {formData.provider === "SES" ? (
+                                        <>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="hello"
+                                                    className="w-1/2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all text-right"
+                                                    value={formData.fromEmail.split("@")[0]}
+                                                    onChange={e => {
+                                                        const prefix = e.target.value;
+                                                        const domain = formData.fromEmail.split("@")[1] || (verifiedDomains[0]?.domainName || "");
+                                                        setFormData({ ...formData, fromEmail: `${prefix}@${domain}` });
+                                                    }}
+                                                />
+                                                <div className="flex items-center text-gray-400">@</div>
+                                                <select
+                                                    className="w-1/2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                                    value={formData.domainId || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?._id || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?.id || ""}
+                                                    onChange={e => {
+                                                        const domainId = e.target.value;
+                                                        const domain = verifiedDomains.find(d => d._id === domainId || d.id === domainId);
+                                                        if (domain) {
+                                                            const prefix = formData.fromEmail.split("@")[0] || "hello";
+                                                            setFormData({
+                                                                ...formData,
+                                                                domainId,
+                                                                fromEmail: `${prefix}@${domain.domainName}`
+                                                            });
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="" disabled>Select Domain</option>
+                                                    {verifiedDomains.map(d => (
+                                                        <option key={d._id || d.id} value={d._id || d.id}>{d.domainName}</option>
+                                                    ))}
+                                                    {verifiedDomains.length === 0 && (
+                                                        <option value="" disabled>No verified domains</option>
+                                                    )}
+                                                </select>
+                                            </div>
                                             {verifiedDomains.length === 0 && (
-                                                <option value="" disabled>No verified domains</option>
+                                                <p className="text-[11px] text-amber-600 flex items-center gap-1 mt-1">
+                                                    <Plus className="w-3 h-3" />
+                                                    No verified domains found. <Link href="/dashboard/settings/domains" className="underline">Add one in settings</Link>.
+                                                </p>
                                             )}
-                                        </select>
-                                    </div>
-                                    {verifiedDomains.length === 0 && (
-                                        <p className="text-[11px] text-amber-600 flex items-center gap-1 mt-1">
-                                            <Plus className="w-3 h-3" />
-                                            No verified domains found. <Link href="/dashboard/settings/domains" className="underline">Add one in settings</Link>.
-                                        </p>
+                                        </>
+                                    ) : (
+                                        <input
+                                            type="email"
+                                            placeholder="hello@yourbrand.com"
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                            value={formData.fromEmail}
+                                            onChange={e => setFormData({ ...formData, fromEmail: e.target.value })}
+                                        />
                                     )}
                                 </div>
                             </div>

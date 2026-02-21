@@ -69,6 +69,7 @@ export interface Campaign {
     scheduledAt?: Date | null;
     sentAt?: Date | null;
     workspaceId: string;
+    provider?: "SES" | "SMTP";
     domainId?: string | null;
     templateId?: string | null;
     recipientListId?: string | null;

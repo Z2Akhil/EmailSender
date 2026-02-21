@@ -12,6 +12,7 @@ const campaignSchema = z.object({
     fromName: z.string().min(1, "From name is required"),
     fromEmail: z.string().email("Invalid from email"),
     replyTo: z.string().email("Invalid reply-to email").optional().or(z.literal("")),
+    provider: z.enum(["SES", "SMTP"]).optional().default("SES"),
     templateId: z.string().optional(),
     domainId: z.string().optional().or(z.literal("")),
     htmlContent: z.string().min(1, "Content is required"),

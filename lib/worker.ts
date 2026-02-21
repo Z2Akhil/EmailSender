@@ -84,7 +84,9 @@ export const initWorker = () => {
                 const workspace = await Workspace.findById(campaign.workspaceId);
 
                 let smtpConfig;
-                if (workspace?.smtpHost && workspace?.smtpPass) {
+                // Route via SMTP if explicitly selected or if legacy campaign has no SES domain
+                const useSmtp = campaign.provider === "SMTP" || (!campaign.provider && !campaign.domainId);
+                if (useSmtp && workspace?.smtpHost && workspace?.smtpPass) {
                     try {
                         const decryptedPass = decrypt(workspace.smtpPass);
                         smtpConfig = {
