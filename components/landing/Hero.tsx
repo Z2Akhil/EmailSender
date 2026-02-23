@@ -37,7 +37,7 @@ export default function Hero() {
                     href="/get-started"
                     className="inline-flex items-center gap-3 font-semibold text-white px-8 py-4 rounded-full transition-all hover:opacity-90"
                     style={{
-                        background: "#635BFF", // The specific purple from the "Get Started" button
+                        background: "#5235EF", // The specific purple from the "Get Started" button
                         fontSize: "16px",
                     }}
                 >
