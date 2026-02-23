@@ -1,6 +1,6 @@
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
-import DashboardMockup from "@/components/landing/DashboardMockup";
+
 import Features from "@/components/landing/Features";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Integrations from "@/components/landing/Integrations";
@@ -14,7 +14,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white">
       <Navbar />
       <Hero />
-      <DashboardMockup />
+
       <Features />
       <HowItWorks />
       <Integrations />

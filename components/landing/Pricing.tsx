@@ -61,7 +61,7 @@ export default function Pricing() {
     };
 
     return (
-        <section id="pricing" className="py-24 px-6" style={{ background: "#F9FAFB" }}>
+        <section id="pricing" className="py-24 px-6" style={{ background: "#f0f2f6" }}>
             <div className="max-w-6xl mx-auto">
                 <div className="text-center mb-12">
                     <p className="text-gray-500 mb-3 text-sm font-medium uppercase tracking-widest">

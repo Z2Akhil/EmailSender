@@ -38,7 +38,10 @@ const socials = [
 
 export default function Footer() {
     return (
-        <footer className="py-16 px-6" style={{ background: "#111111" }}>
+        <footer
+            className="py-16 px-6"
+            style={{ background: "linear-gradient(180deg, #f0f2f6 0%, #111111 8%)" }}
+        >
             <div className="max-w-6xl mx-auto">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-16">
                     {/* Brand */}

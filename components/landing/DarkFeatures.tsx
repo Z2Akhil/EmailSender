@@ -2,7 +2,7 @@
 
 export default function DarkFeatures() {
     return (
-        <section className="py-24 px-6" style={{ background: "#111111" }}>
+        <section className="py-24 px-6 mx-20 rounded-[48px]" style={{ background: "#111111" }}>
             <div className="max-w-6xl mx-auto">
                 <div className="text-center mb-16">
                     <h2

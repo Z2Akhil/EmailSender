@@ -22,7 +22,7 @@ const avatarColors = ["#7C3AED", "#3B82F6", "#10B981", "#F59E0B", "#EC4899"];
 
 export default function Testimonials() {
     return (
-        <section className="py-24 px-6 bg-white">
+        <section className="py-24 px-6" style={{ background: "#f0f2f6" }}>
             <div className="max-w-4xl mx-auto text-center">
                 {/* Overlapping avatars */}
                 <div className="flex justify-center mb-6">

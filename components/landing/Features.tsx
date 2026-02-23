@@ -2,31 +2,25 @@
 
 const features = [
     {
-        emoji: "📋",
-        bg: "#F5F3FF",
-        title: "Contact Management",
-        description:
-            "Upload CSV/Excel files, organize contacts into lists, and manage unsubscribes automatically.",
+        title: "Bulk WhatsApp Sender",
+        description: "Blast messages to thousands of contacts instantly with 99% delivery rates and real-time status tracking.",
+        imagePath: "/images/whatsapp-feature.avif", // Replace with your image
     },
     {
-        emoji: "✉️",
-        bg: "#EFF6FF",
-        title: "Campaign Builder",
-        description:
-            "Design beautiful emails with pre-built templates and personalization tags like {{first_name}}.",
+        title: "Advanced Email Blast",
+        description: "High-inbox delivery for mass campaigns. Scale your outreach with automated warm-up and spam-filter bypass.",
+        imagePath: "/images/email-feature.avif", // Replace with your image
     },
     {
-        emoji: "🤝",
-        bg: "#FDF2F8",
-        title: "Real-time Collaboration",
-        description:
-            "Work seamlessly with your team, share campaigns, and get instant feedback — all in one platform.",
+        title: "Contact List Scaling",
+        description: "Upload millions of leads via CSV. Automatically clean your list to remove dead numbers and invalid emails.",
+        imagePath: "/images/list-feature.avif", // Replace with your image
     },
 ];
 
 export default function Features() {
     return (
-        <section id="features" className="py-24 px-6" style={{ background: "#F9FAFB" }}>
+        <section id="features" className="py-24 px-6 bg-white">
             <div className="max-w-6xl mx-auto">
                 <div className="text-center mb-16">
                     <h2
@@ -54,30 +48,30 @@ export default function Features() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {features.map((f) => (
                         <div
                             key={f.title}
-                            className="bg-white border rounded-3xl p-7 transition-all duration-300 hover:-translate-y-1 cursor-default"
-                            style={{ borderColor: "#E5E7EB" }}
-                            onMouseEnter={(e) => {
-                                (e.currentTarget as HTMLDivElement).style.borderColor = "#DDD6FE";
-                                (e.currentTarget as HTMLDivElement).style.boxShadow =
-                                    "0 8px 40px rgba(124,58,237,0.08)";
-                            }}
-                            onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLDivElement).style.borderColor = "#E5E7EB";
-                                (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
-                            }}
+                            className="bg-[#f0f2f6] rounded-[32px] p-4 pb-8 group cursor-default border-0"
                         >
-                            <div
-                                className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl mb-5"
-                                style={{ background: f.bg }}
-                            >
-                                {f.emoji}
+                            {/* Static Image Container */}
+                            <div className="relative aspect-[4/3] mb-6 overflow-hidden rounded-[24px] bg-gray-50">
+                                <img
+                                    src={f.imagePath}
+                                    alt={f.title}
+                                    className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent pointer-events-none" />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">{f.title}</h3>
-                            <p className="text-gray-500 text-sm leading-relaxed">{f.description}</p>
+
+                            <div className="px-3">
+                                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">
+                                    {f.title}
+                                </h3>
+                                <p className="text-gray-500 text-sm leading-relaxed">
+                                    {f.description}
+                                </p>
+                            </div>
                         </div>
                     ))}
                 </div>
