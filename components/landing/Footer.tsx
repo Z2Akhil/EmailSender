@@ -63,10 +63,10 @@ export default function Footer() {
 
                 {/* Main grid: wide brand left | quick links | all pages */}
                 <FadeIn direction="up">
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-10 mb-16">
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-10 md:gap-16 mb-16">
 
                         {/* Brand + social */}
-                        <div className="flex flex-col justify-between min-h-[220px]">
+                        <div className="flex flex-col justify-between md:min-h-[220px] gap-8 md:gap-0">
                             {/* Logo */}
                             <div className="flex items-center gap-2">
                                 <div
@@ -114,8 +114,59 @@ export default function Footer() {
                             </div>
                         </div>
 
-                        {/* Quick Links */}
-                        <div className="min-w-[140px]">
+                        {/* Links Container for Mobile */}
+                        <div className="grid grid-cols-2 gap-8 md:gap-16 md:hidden">
+                            {/* Quick Links */}
+                            <div>
+                                <p className="text-sm font-bold text-white mb-5">Quick Links</p>
+                                <ul className="space-y-3.5">
+                                    {quickLinks.map((link) => (
+                                        <li key={link.label}>
+                                            <a
+                                                href={link.href}
+                                                className="text-sm transition-colors"
+                                                style={{ color: "#9CA3AF" }}
+                                                onMouseEnter={hoverWhite}
+                                                onMouseLeave={resetGray}
+                                            >
+                                                {link.label}
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+
+                            {/* All Pages */}
+                            <div>
+                                <p className="text-sm font-bold text-white mb-5">All Pages</p>
+                                <ul className="space-y-3.5">
+                                    {allPages.map((page) => (
+                                        <li key={page.label} className="flex flex-wrap items-center gap-2">
+                                            <a
+                                                href={page.href}
+                                                className="text-sm transition-colors"
+                                                style={{ color: "#9CA3AF" }}
+                                                onMouseEnter={hoverWhite}
+                                                onMouseLeave={resetGray}
+                                            >
+                                                {page.label}
+                                            </a>
+                                            {page.badge && (
+                                                <span
+                                                    className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white"
+                                                    style={{ background: "#5235EF" }}
+                                                >
+                                                    New
+                                                </span>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+
+                        {/* Quick Links (Desktop) */}
+                        <div className="hidden md:block min-w-[140px]">
                             <p className="text-sm font-bold text-white mb-5">Quick Links</p>
                             <ul className="space-y-3.5">
                                 {quickLinks.map((link) => (
@@ -134,8 +185,8 @@ export default function Footer() {
                             </ul>
                         </div>
 
-                        {/* All Pages */}
-                        <div className="min-w-[160px]">
+                        {/* All Pages (Desktop) */}
+                        <div className="hidden md:block min-w-[160px]">
                             <p className="text-sm font-bold text-white mb-5">All Pages</p>
                             <ul className="space-y-3.5">
                                 {allPages.map((page) => (
