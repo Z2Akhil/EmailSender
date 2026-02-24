@@ -1,6 +1,7 @@
 "use client";
 
 import { Mail } from "lucide-react";
+import { FadeIn } from "@/components/animations/FadeIn";
 
 const quickLinks = [
     { label: "Home", href: "/" },
@@ -61,118 +62,122 @@ export default function Footer() {
             <div className="max-w-6xl mx-auto">
 
                 {/* Main grid: wide brand left | quick links | all pages */}
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-10 mb-16">
+                <FadeIn direction="up">
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-10 mb-16">
 
-                    {/* Brand + social */}
-                    <div className="flex flex-col justify-between min-h-[220px]">
-                        {/* Logo */}
-                        <div className="flex items-center gap-2">
-                            <div
-                                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                                style={{ background: "linear-gradient(135deg,#7C3AED,#A855F7)" }}
-                            >
-                                <Mail className="w-4 h-4 text-white" />
+                        {/* Brand + social */}
+                        <div className="flex flex-col justify-between min-h-[220px]">
+                            {/* Logo */}
+                            <div className="flex items-center gap-2">
+                                <div
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                    style={{ background: "linear-gradient(135deg,#7C3AED,#A855F7)" }}
+                                >
+                                    <Mail className="w-4 h-4 text-white" />
+                                </div>
+                                <span className="text-lg font-extrabold text-white tracking-tight">
+                                    BulkMailer
+                                </span>
                             </div>
-                            <span className="text-lg font-extrabold text-white tracking-tight">
-                                BulkMailer
-                            </span>
+
+                            {/* Social icons pinned to bottom of column */}
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">
+                                    Follow us on:
+                                </p>
+                                <div className="flex items-center gap-4">
+                                    {socials.map((s) => (
+                                        <a
+                                            key={s.label}
+                                            href="#"
+                                            aria-label={s.label}
+                                            className="transition-colors"
+                                            style={{ color: "#6B7280" }}
+                                            onMouseEnter={hoverWhite}
+                                            onMouseLeave={resetGray}
+                                        >
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                viewBox={s.viewBox}
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                className="w-5 h-5"
+                                            >
+                                                <path d={s.path} />
+                                            </svg>
+                                        </a>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Social icons pinned to bottom of column */}
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">
-                                Follow us on:
-                            </p>
-                            <div className="flex items-center gap-4">
-                                {socials.map((s) => (
-                                    <a
-                                        key={s.label}
-                                        href="#"
-                                        aria-label={s.label}
-                                        className="transition-colors"
-                                        style={{ color: "#6B7280" }}
-                                        onMouseEnter={hoverWhite}
-                                        onMouseLeave={resetGray}
-                                    >
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            viewBox={s.viewBox}
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            className="w-5 h-5"
+                        {/* Quick Links */}
+                        <div className="min-w-[140px]">
+                            <p className="text-sm font-bold text-white mb-5">Quick Links</p>
+                            <ul className="space-y-3.5">
+                                {quickLinks.map((link) => (
+                                    <li key={link.label}>
+                                        <a
+                                            href={link.href}
+                                            className="text-sm transition-colors"
+                                            style={{ color: "#9CA3AF" }}
+                                            onMouseEnter={hoverWhite}
+                                            onMouseLeave={resetGray}
                                         >
-                                            <path d={s.path} />
-                                        </svg>
-                                    </a>
+                                            {link.label}
+                                        </a>
+                                    </li>
                                 ))}
-                            </div>
+                            </ul>
+                        </div>
+
+                        {/* All Pages */}
+                        <div className="min-w-[160px]">
+                            <p className="text-sm font-bold text-white mb-5">All Pages</p>
+                            <ul className="space-y-3.5">
+                                {allPages.map((page) => (
+                                    <li key={page.label} className="flex items-center gap-2">
+                                        <a
+                                            href={page.href}
+                                            className="text-sm transition-colors"
+                                            style={{ color: "#9CA3AF" }}
+                                            onMouseEnter={hoverWhite}
+                                            onMouseLeave={resetGray}
+                                        >
+                                            {page.label}
+                                        </a>
+                                        {page.badge && (
+                                            <span
+                                                className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white"
+                                                style={{ background: "#5235EF" }}
+                                            >
+                                                New
+                                            </span>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
                     </div>
-
-                    {/* Quick Links */}
-                    <div className="min-w-[140px]">
-                        <p className="text-sm font-bold text-white mb-5">Quick Links</p>
-                        <ul className="space-y-3.5">
-                            {quickLinks.map((link) => (
-                                <li key={link.label}>
-                                    <a
-                                        href={link.href}
-                                        className="text-sm transition-colors"
-                                        style={{ color: "#9CA3AF" }}
-                                        onMouseEnter={hoverWhite}
-                                        onMouseLeave={resetGray}
-                                    >
-                                        {link.label}
-                                    </a>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    {/* All Pages */}
-                    <div className="min-w-[160px]">
-                        <p className="text-sm font-bold text-white mb-5">All Pages</p>
-                        <ul className="space-y-3.5">
-                            {allPages.map((page) => (
-                                <li key={page.label} className="flex items-center gap-2">
-                                    <a
-                                        href={page.href}
-                                        className="text-sm transition-colors"
-                                        style={{ color: "#9CA3AF" }}
-                                        onMouseEnter={hoverWhite}
-                                        onMouseLeave={resetGray}
-                                    >
-                                        {page.label}
-                                    </a>
-                                    {page.badge && (
-                                        <span
-                                            className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white"
-                                            style={{ background: "#5235EF" }}
-                                        >
-                                            New
-                                        </span>
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </div>
+                </FadeIn>
 
                 {/* Bottom bar */}
-                <div
-                    className="border-t py-5 text-center"
-                    style={{ borderColor: "rgba(255,255,255,0.07)" }}
-                >
-                    <p className="text-xs" style={{ color: "#4B5563" }}>
-                        Designed by{" "}
-                        <span className="font-bold text-gray-400">BulkMailer</span>
-                        . Powered by{" "}
-                        <span className="font-bold text-gray-400">Next.js</span>
-                    </p>
-                </div>
+                <FadeIn delay={0.2} direction="up">
+                    <div
+                        className="border-t py-5 text-center"
+                        style={{ borderColor: "rgba(255,255,255,0.07)" }}
+                    >
+                        <p className="text-xs" style={{ color: "#4B5563" }}>
+                            Designed by{" "}
+                            <span className="font-bold text-gray-400">BulkMailer</span>
+                            . Powered by{" "}
+                            <span className="font-bold text-gray-400">Next.js</span>
+                        </p>
+                    </div>
+                </FadeIn>
             </div>
         </footer>
     );

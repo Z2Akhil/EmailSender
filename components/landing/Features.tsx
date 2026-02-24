@@ -1,5 +1,7 @@
 "use client";
 
+import { FadeIn, FadeInStagger, FadeInStaggerItem } from "@/components/animations/FadeIn";
+
 const features = [
     {
         title: "Bulk WhatsApp Sender",
@@ -22,59 +24,60 @@ export default function Features() {
     return (
         <section id="features" className="py-24 px-6 bg-white">
             <div className="max-w-6xl mx-auto">
-                <div className="text-center mb-16">
-                    <h2
-                        className="font-black mb-4"
-                        style={{
-                            fontSize: "clamp(32px,4vw,52px)",
-                            letterSpacing: "-0.03em",
-                            color: "#111111",
-                        }}
-                    >
-                        Everything you need to run{" "}
-                        <span
+                <FadeIn direction="up">
+                    <div className="text-center mb-16">
+                        <h2
+                            className="font-black mb-4"
                             style={{
-                                background: "linear-gradient(135deg,#7C3AED,#A855F7,#EC4899)",
-                                WebkitBackgroundClip: "text",
-                                WebkitTextFillColor: "transparent",
-                                backgroundClip: "text",
+                                fontSize: "clamp(32px,4vw,52px)",
+                                letterSpacing: "-0.03em",
+                                color: "#111111",
                             }}
                         >
-                            winning campaigns
-                        </span>
-                    </h2>
-                    <p className="text-gray-500 text-lg max-w-xl mx-auto leading-relaxed">
-                        All the tools you need in one simple platform — no bloat, no confusion.
-                    </p>
-                </div>
+                            Everything you need to run{" "}
+                            <span
+                                style={{
+                                    background: "linear-gradient(135deg,#7C3AED,#A855F7,#EC4899)",
+                                    WebkitBackgroundClip: "text",
+                                    WebkitTextFillColor: "transparent",
+                                    backgroundClip: "text",
+                                }}
+                            >
+                                winning campaigns
+                            </span>
+                        </h2>
+                        <p className="text-gray-500 text-lg max-w-xl mx-auto leading-relaxed">
+                            All the tools you need in one simple platform — no bloat, no confusion.
+                        </p>
+                    </div>
+                </FadeIn>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <FadeInStagger className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {features.map((f) => (
-                        <div
-                            key={f.title}
-                            className="bg-[#f0f2f6] rounded-[32px] p-4 pb-8 group cursor-default border-0"
-                        >
-                            {/* Static Image Container */}
-                            <div className="relative aspect-[4/3] mb-6 overflow-hidden rounded-[24px] bg-gray-50">
-                                <img
-                                    src={f.imagePath}
-                                    alt={f.title}
-                                    className="w-full h-full object-cover"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent pointer-events-none" />
-                            </div>
+                        <FadeInStaggerItem key={f.title} direction="up">
+                            <div className="bg-[#f0f2f6] rounded-[32px] p-4 pb-8 group cursor-default border-0">
+                                {/* Static Image Container */}
+                                <div className="relative aspect-[4/3] mb-6 overflow-hidden rounded-[24px]">
+                                    <img
+                                        src={f.imagePath}
+                                        alt={f.title}
+                                        className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent pointer-events-none" />
+                                </div>
 
-                            <div className="px-3">
-                                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">
-                                    {f.title}
-                                </h3>
-                                <p className="text-gray-500 text-sm leading-relaxed">
-                                    {f.description}
-                                </p>
+                                <div className="px-3">
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">
+                                        {f.title}
+                                    </h3>
+                                    <p className="text-gray-500 text-sm leading-relaxed">
+                                        {f.description}
+                                    </p>
+                                </div>
                             </div>
-                        </div>
+                        </FadeInStaggerItem>
                     ))}
-                </div>
+                </FadeInStagger>
             </div>
         </section>
     );

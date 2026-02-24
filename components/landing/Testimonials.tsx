@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FadeIn } from "@/components/animations/FadeIn";
 
 const testimonials = [
     {
@@ -79,74 +80,78 @@ export default function Testimonials() {
 
                     {/* Left: Heading */}
                     <div className="lg:pt-4">
-                        <h2
-                            className="font-black text-gray-900 leading-tight"
-                            style={{
-                                fontSize: "clamp(36px, 5vw, 64px)",
-                                letterSpacing: "-0.03em",
-                            }}
-                        >
-                            Loved by marketers &amp;
-                            <br />
-                            teams
-                        </h2>
+                        <FadeIn direction="up">
+                            <h2
+                                className="font-black text-gray-900 leading-tight"
+                                style={{
+                                    fontSize: "clamp(36px, 5vw, 64px)",
+                                    letterSpacing: "-0.03em",
+                                }}
+                            >
+                                Loved by marketers &amp;
+                                <br />
+                                teams
+                            </h2>
+                        </FadeIn>
                     </div>
 
                     {/* Right: Avatars + Quote */}
-                    <div>
-                        {/* Avatar row — clickable rounded squares */}
-                        <div className="flex items-center gap-2 mb-6">
-                            {testimonials.map((t) => {
-                                const isActive = t.id === activeId;
-                                return (
-                                    <button
-                                        key={t.id}
-                                        onClick={() => handleSelect(t.id)}
-                                        className="relative rounded-2xl overflow-hidden flex-shrink-0 transition-all duration-200"
-                                        style={{
-                                            width: "52px",
-                                            height: "52px",
-                                            outline: isActive
-                                                ? "2.5px solid #5235EF"
-                                                : "2.5px solid transparent",
-                                            outlineOffset: "2px",
-                                            opacity: isActive ? 1 : 0.55,
-                                            transform: isActive ? "scale(1.08)" : "scale(1)",
-                                            background: "#f0f0f0",
-                                        }}
-                                        aria-label={`View ${t.name}'s testimonial`}
-                                    >
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img
-                                            src={avatarUrl(t.avatarSeed)}
-                                            alt={t.name}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </button>
-                                );
-                            })}
-                        </div>
+                    <FadeIn delay={0.2} direction="left" className="w-full">
+                        <div>
+                            {/* Avatar row — clickable rounded squares */}
+                            <div className="flex items-center gap-2 mb-6">
+                                {testimonials.map((t) => {
+                                    const isActive = t.id === activeId;
+                                    return (
+                                        <button
+                                            key={t.id}
+                                            onClick={() => handleSelect(t.id)}
+                                            className="relative rounded-2xl overflow-hidden flex-shrink-0 transition-all duration-200"
+                                            style={{
+                                                width: "52px",
+                                                height: "52px",
+                                                outline: isActive
+                                                    ? "2.5px solid #5235EF"
+                                                    : "2.5px solid transparent",
+                                                outlineOffset: "2px",
+                                                opacity: isActive ? 1 : 0.55,
+                                                transform: isActive ? "scale(1.08)" : "scale(1)",
+                                                background: "#f0f0f0",
+                                            }}
+                                            aria-label={`View ${t.name}'s testimonial`}
+                                        >
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                                src={avatarUrl(t.avatarSeed)}
+                                                alt={t.name}
+                                                className="w-full h-full object-cover"
+                                            />
+                                        </button>
+                                    );
+                                })}
+                            </div>
 
-                        {/* Quote — fades on switch */}
-                        <div
-                            style={{
-                                opacity: fading ? 0 : 1,
-                                transition: "opacity 180ms ease",
-                            }}
-                        >
-                            <blockquote
-                                className="text-gray-900 font-semibold leading-relaxed mb-4"
-                                style={{ fontSize: "clamp(14px, 1.3vw, 16px)" }}
+                            {/* Quote — fades on switch */}
+                            <div
+                                style={{
+                                    opacity: fading ? 0 : 1,
+                                    transition: "opacity 180ms ease",
+                                }}
                             >
-                                &ldquo;{active.quote}&rdquo;
-                            </blockquote>
+                                <blockquote
+                                    className="text-gray-900 font-semibold leading-relaxed mb-4"
+                                    style={{ fontSize: "clamp(14px, 1.3vw, 16px)" }}
+                                >
+                                    &ldquo;{active.quote}&rdquo;
+                                </blockquote>
 
-                            <p className="text-sm font-semibold">
-                                <span className="text-gray-700">{active.name}, {active.role}, </span>
-                                <span style={{ color: "#5235EF" }}>{active.company}</span>
-                            </p>
+                                <p className="text-sm font-semibold">
+                                    <span className="text-gray-700">{active.name}, {active.role}, </span>
+                                    <span style={{ color: "#5235EF" }}>{active.company}</span>
+                                </p>
+                            </div>
                         </div>
-                    </div>
+                    </FadeIn>
                 </div>
 
             </div>
