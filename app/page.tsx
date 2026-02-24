@@ -19,7 +19,9 @@ export default function LandingPage() {
       <Features />
       <HowItWorks />
       <Integrations />
-      <DarkFeatures />
+      <div className="hidden md:block">
+        <DarkFeatures />
+      </div>
       <Testimonials />
       <Pricing />
       <PerfectSolution />

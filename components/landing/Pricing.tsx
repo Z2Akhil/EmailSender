@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, UIEvent } from "react";
 
 const plans = [
     {
@@ -54,6 +54,15 @@ const plans = [
 
 export default function Pricing() {
     const [yearly, setYearly] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(0);
+
+    const handleScroll = (e: UIEvent<HTMLDivElement>) => {
+        const { scrollLeft, scrollWidth, clientWidth } = e.currentTarget;
+        if (scrollWidth <= clientWidth) return;
+        const progress = scrollLeft / (scrollWidth - clientWidth);
+        const index = Math.max(0, Math.min(plans.length - 1, Math.round(progress * (plans.length - 1))));
+        setActiveIndex(index);
+    };
 
     const displayPrice = (monthly: number) => {
         const amount = yearly ? Math.round(monthly * 0.8) : monthly;
@@ -119,11 +128,14 @@ export default function Pricing() {
                 </div>
 
                 {/* Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div
+                    className="flex overflow-x-auto md:grid md:grid-cols-3 gap-6 pb-8 md:pb-0 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] -mx-6 px-6 md:mx-0 md:px-0"
+                    onScroll={handleScroll}
+                >
                     {plans.map((plan) => (
                         <div
                             key={plan.name}
-                            className="rounded-2xl p-7 border transition-all duration-300"
+                            className="w-[85vw] sm:w-[320px] md:w-auto flex-shrink-0 snap-center md:snap-align-none rounded-2xl p-7 border transition-all duration-300 flex flex-col"
                             style={{
                                 background: "#FFFFFF",
                                 borderColor: "#E5E7EB",
@@ -210,6 +222,19 @@ export default function Pricing() {
                                 </ul>
                             </div>
                         </div>
+                    ))}
+                </div>
+
+                {/* Mobile Carousel Indicators */}
+                <div className="flex md:hidden justify-center items-center gap-2 mt-4 pb-4">
+                    {plans.map((_, i) => (
+                        <div
+                            key={i}
+                            className={`h-2 rounded-full transition-all duration-300 ${i === activeIndex
+                                    ? "w-6 bg-[#5235EF]"
+                                    : "w-2 bg-gray-200"
+                                }`}
+                        />
                     ))}
                 </div>
             </div>
