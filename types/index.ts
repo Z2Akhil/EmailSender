@@ -118,20 +118,7 @@ export interface ApiResponse<T = unknown> {
     message?: string;
 }
 
-// ─── NextAuth Session Extension ───────────────────────────────────────────────
 
-declare module "next-auth" {
-    interface Session {
-        user: {
-            id: string;
-            name?: string | null;
-            email?: string | null;
-            image?: string | null;
-            plan: string;
-            workspaceId: string;
-        };
-    }
-}
 
 export interface SMTPConfig {
     smtpHost: string;

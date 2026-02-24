@@ -9,6 +9,8 @@ export interface IUser extends Document {
     image?: string;
     emailVerified?: Date;
     plan: "FREE" | "STARTER" | "GROWTH" | "PRO";
+    providers: ("credentials" | "google")[];
+    isProfileComplete: boolean;
     createdAt: Date;
     updatedAt: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -26,6 +28,15 @@ const UserSchema = new Schema<IUser>(
             enum: ["FREE", "STARTER", "GROWTH", "PRO"],
             default: "FREE",
         },
+        providers: {
+            type: [String],
+            enum: ["credentials", "google"],
+            default: [],
+        },
+        isProfileComplete: {
+            type: Boolean,
+            default: false,
+        }
     },
     {
         timestamps: true,

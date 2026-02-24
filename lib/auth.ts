@@ -57,13 +57,14 @@ export const authOptions: NextAuthOptions = {
                     name: user.name,
                     image: user.image,
                     plan: user.plan,
+                    isProfileComplete: user.isProfileComplete,
                 };
             },
         }),
     ],
     callbacks: {
         async signIn({ user, account }) {
-            // Handle Google OAuth — create user if first time
+            // Handle Google OAuth — create user if first time or link account
             if (account?.provider === "google") {
                 await connectDB();
 
@@ -75,13 +76,13 @@ export const authOptions: NextAuthOptions = {
                         name: user.name ?? "User",
                         email: user.email ?? "",
                         emailVerified: new Date(),
+                        providers: ["google"],
                     };
                     if (user.image) userData.image = user.image;
 
                     const newUser = await User.create(userData) as IUser;
-                    const newUserId = (newUser._id as mongoose.Types.ObjectId).toString();
 
-                    // Create default workspace
+                    // Create default workspace for new Google user
                     const workspace = await Workspace.create({
                         name: `${userData.name}'s Workspace`,
                         ownerId: newUser._id,
@@ -93,20 +94,54 @@ export const authOptions: NextAuthOptions = {
                         role: "OWNER",
                     });
 
-                    user.id = newUserId;
-                    (user as any).plan = newUser.plan;
                 } else {
-                    user.id = (existingUser._id as mongoose.Types.ObjectId).toString();
-                    (user as any).plan = existingUser.plan;
+                    // LINK ACCOUNT: If user exists but hasn't logged in with Google before
+                    if (!existingUser.providers.includes("google")) {
+                        existingUser.providers.push("google");
+                        // Only save if we are actually adding the provider to avoid redundant writes
+                        await existingUser.save();
+                    }
                 }
             }
 
             return true;
         },
-        async jwt({ token, user }) {
+        async jwt({ token, user, account, trigger }) {
+            // Handle session update
+            if (trigger === "update" && token.id) {
+                await connectDB();
+                const dbUser = await User.findById(token.id);
+                if (dbUser) {
+                    token.name = dbUser.name;
+                    token.isProfileComplete = dbUser.isProfileComplete;
+                }
+            }
+
+            // Initial sign in
             if (user) {
-                token.id = user.id;
-                token.plan = (user as any).plan ?? "FREE";
+                if (account?.provider === "google") {
+                    // Crucial Fix: Fetch the actual DB user, because `user.id` from Google is just the Google profile ID (e.g. "103289...")
+                    await connectDB();
+                    const dbUser = await User.findOne({ email: user.email });
+                    if (dbUser) {
+                        token.id = dbUser._id.toString();
+                        token.plan = dbUser.plan ?? "FREE";
+                        token.name = dbUser.name; // Use local db name
+                        token.isProfileComplete = dbUser.isProfileComplete;
+                    } else {
+                        // Fallback (though the signIn callback guarantees dbUser exists by this point)
+                        token.id = user.id;
+                    }
+                } else {
+                    // Credentials login already maps database _id directly natively
+                    token.id = user.id;
+                    token.plan = (user as any).plan ?? "FREE";
+                    // For credentials login, user.isProfileComplete needs to be fetched, or we can assume it might be on the user object if returned from authorize.
+                    // However, to be safe, we should probably fetch it if not mapped. But we can fetch it when workspace is resolved below or just here:
+                    if (user && 'isProfileComplete' in user) {
+                        token.isProfileComplete = (user as any).isProfileComplete;
+                    }
+                }
             }
 
             // Always ensure workspaceId is in the token if we have a user ID
@@ -125,6 +160,10 @@ export const authOptions: NextAuthOptions = {
                 session.user.id = token.id as string;
                 session.user.plan = (token.plan as string) ?? "FREE";
                 session.user.workspaceId = token.workspaceId as string;
+                session.user.isProfileComplete = token.isProfileComplete as boolean;
+                if (token.name) {
+                    session.user.name = token.name as string;
+                }
             }
             return session;
         },

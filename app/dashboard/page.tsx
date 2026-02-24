@@ -14,7 +14,9 @@ import {
     AlertCircle
 } from "lucide-react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { Campaign, ApiResponse } from "@/types";
+import { ProfileSetupDialog } from "@/components/dashboard/ProfileSetupDialog";
 
 interface DashboardStats {
     totalContacts: number;
@@ -26,6 +28,7 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
+    const { data: session } = useSession();
     const { data: statsResponse, isLoading } = useQuery<ApiResponse<DashboardStats>>({
         queryKey: ["dashboard-stats"],
         queryFn: async () => {
@@ -82,6 +85,13 @@ export default function DashboardPage() {
 
     return (
         <div className="max-w-6xl mx-auto">
+            {session?.user && session.user.isProfileComplete === false && (
+                <ProfileSetupDialog
+                    defaultName={session.user.name || ""}
+                    defaultEmail={session.user.email || ""}
+                />
+            )}
+
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>

@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Create user (password hashed by pre-save hook)
-        const user = await User.create({ name, email, password });
+        const user = await User.create({ name, email, password, providers: ["credentials"] });
 
         // Create default workspace
         const workspace = await Workspace.create({
