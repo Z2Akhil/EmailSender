@@ -52,11 +52,12 @@ export function FadeInStagger({
     className = "",
     children,
     faster = false,
+    ...props
 }: {
     className?: string;
     children: ReactNode;
     faster?: boolean;
-}) {
+} & React.ComponentProps<typeof motion.div>) {
     return (
         <motion.div
             initial="hidden"
@@ -64,6 +65,7 @@ export function FadeInStagger({
             viewport={{ once: true, margin: "-50px" }}
             transition={{ staggerChildren: faster ? 0.08 : 0.15 }}
             className={className}
+            {...props}
         >
             {children}
         </motion.div>

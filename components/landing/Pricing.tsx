@@ -65,6 +65,22 @@ export default function Pricing() {
         setActiveIndex(index);
     };
 
+    const handleDotClick = (index: number) => {
+        const carousel = document.getElementById("pricing-carousel");
+        if (carousel) {
+            const scrollWidth = carousel.scrollWidth;
+            // The scroll amount is proportional to the container index. 
+            // scrollWidth isn't exact if items have margins, but works fairly well.
+            // A more exact scroll amount is index * itemWidth
+            const itemWidth = carousel.scrollWidth / plans.length;
+            carousel.scrollTo({
+                left: index * itemWidth,
+                behavior: "smooth",
+            });
+            setActiveIndex(index);
+        }
+    };
+
     const displayPrice = (monthly: number) => {
         const amount = yearly ? Math.round(monthly * 0.8) : monthly;
         return `$${amount}`;
@@ -132,8 +148,8 @@ export default function Pricing() {
 
                 {/* Cards */}
                 <FadeInStagger
+                    id="pricing-carousel"
                     className="flex overflow-x-auto md:grid md:grid-cols-3 gap-6 pb-8 md:pb-0 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] -mx-6 px-6 md:mx-0 md:px-0"
-                    // @ts-expect-error - onScroll is not in intrinsic attributes for motion.div directly easily but it works
                     onScroll={handleScroll}
                 >
                     {plans.map((plan) => (
@@ -236,7 +252,8 @@ export default function Pricing() {
                     {plans.map((_, i) => (
                         <div
                             key={i}
-                            className={`h-2 rounded-full transition-all duration-300 ${i === activeIndex
+                            onClick={() => handleDotClick(i)}
+                            className={`h-2 rounded-full cursor-pointer transition-all duration-300 ${i === activeIndex
                                 ? "w-6 bg-[#5235EF]"
                                 : "w-2 bg-gray-200"
                                 }`}
