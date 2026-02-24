@@ -1,52 +1,72 @@
 "use client";
 
-import Link from "next/link";
 import { Mail } from "lucide-react";
 
-const quickLinks = ["Home", "Features", "Pricing", "Download"];
-const allPages = [
-    { label: "Templates", badge: true },
-    { label: "About us" },
-    { label: "Contact us" },
-    { label: "Blog" },
-    { label: "Privacy Policy" },
+const quickLinks = [
+    { label: "Home", href: "/" },
+    { label: "Features", href: "#features" },
+    { label: "Pricing", href: "#pricing" },
+    { label: "Download", href: "#" },
 ];
 
-// Social icon SVGs (inline, avoids additional icon package dependency)
+const allPages = [
+    { label: "Power-Ups", href: "#", badge: true },
+    { label: "About us", href: "#" },
+    { label: "Contact us", href: "#" },
+    { label: "Blog", href: "#" },
+    { label: "Waitlist", href: "#" },
+    { label: "Changelog", href: "#" },
+    { label: "Privacy Policy", href: "#" },
+    { label: "404", href: "#" },
+];
+
+// Inline SVG paths for social icons
 const socials = [
     {
         label: "Facebook",
+        viewBox: "0 0 24 24",
         path: "M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z",
     },
     {
-        label: "X / Twitter",
-        path: "M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z",
+        label: "X",
+        viewBox: "0 0 24 24",
+        // X (Twitter) modern logo shape using polyline
+        path: "M4 4l16 16M4 20 20 4",
     },
     {
-        label: "Instagram",
-        path: "M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z M17.5 6.5h.01 M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9A5.5 5.5 0 0 1 16.5 22h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2z",
+        label: "TikTok",
+        viewBox: "0 0 24 24",
+        path: "M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5",
     },
     {
         label: "LinkedIn",
-        path: "M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z M2 9h4v12H2z M4 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
+        viewBox: "0 0 24 24",
+        path: "M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2zM4 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
     },
     {
         label: "YouTube",
-        path: "M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.95C5.12 20 12 20 12 20s6.88 0 8.59-.47a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z M9.75 15.02l5.75-3.02-5.75-3.02v6.04z",
+        viewBox: "0 0 24 24",
+        path: "M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.95C5.12 20 12 20 12 20s6.88 0 8.59-.47a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58zM9.75 15.02l5.75-3.02-5.75-3.02v6.04z",
     },
 ];
 
+const hoverWhite = (e: React.MouseEvent<HTMLElement>) =>
+    ((e.currentTarget as HTMLElement).style.color = "#ffffff");
+const resetGray = (e: React.MouseEvent<HTMLElement>) =>
+    ((e.currentTarget as HTMLElement).style.color = "#9CA3AF");
+
 export default function Footer() {
     return (
-        <footer
-            className="py-16 px-6"
-            style={{ background: "linear-gradient(180deg, #f0f2f6 0%, #111111 8%)" }}
-        >
+        <footer className="px-6 pt-16 pb-0" style={{ background: "#171717" }}>
             <div className="max-w-6xl mx-auto">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-16">
-                    {/* Brand */}
-                    <div className="md:col-span-2">
-                        <div className="flex items-center gap-2 mb-4">
+
+                {/* Main grid: wide brand left | quick links | all pages */}
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-10 mb-16">
+
+                    {/* Brand + social */}
+                    <div className="flex flex-col justify-between min-h-[220px]">
+                        {/* Logo */}
+                        <div className="flex items-center gap-2">
                             <div
                                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                                 style={{ background: "linear-gradient(135deg,#7C3AED,#A855F7)" }}
@@ -57,39 +77,32 @@ export default function Footer() {
                                 BulkMailer
                             </span>
                         </div>
-                        <p className="text-sm text-gray-500 leading-relaxed max-w-xs">
-                            The affordable, powerful email marketing platform for growing businesses.
-                        </p>
-                        <div className="mt-6">
-                            <p className="text-xs text-gray-600 uppercase tracking-widest mb-3">
+
+                        {/* Social icons pinned to bottom of column */}
+                        <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">
                                 Follow us on:
                             </p>
-                            <div className="flex gap-3">
+                            <div className="flex items-center gap-4">
                                 {socials.map((s) => (
                                     <a
                                         key={s.label}
                                         href="#"
                                         aria-label={s.label}
-                                        className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-                                        style={{ background: "rgba(255,255,255,0.08)" }}
-                                        onMouseEnter={(e) =>
-                                        ((e.currentTarget as HTMLAnchorElement).style.background =
-                                            "rgba(255,255,255,0.18)")
-                                        }
-                                        onMouseLeave={(e) =>
-                                        ((e.currentTarget as HTMLAnchorElement).style.background =
-                                            "rgba(255,255,255,0.08)")
-                                        }
+                                        className="transition-colors"
+                                        style={{ color: "#6B7280" }}
+                                        onMouseEnter={hoverWhite}
+                                        onMouseLeave={resetGray}
                                     >
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
-                                            viewBox="0 0 24 24"
+                                            viewBox={s.viewBox}
                                             fill="none"
-                                            stroke="white"
+                                            stroke="currentColor"
                                             strokeWidth="2"
                                             strokeLinecap="round"
                                             strokeLinejoin="round"
-                                            className="w-4 h-4"
+                                            className="w-5 h-5"
                                         >
                                             <path d={s.path} />
                                         </svg>
@@ -100,16 +113,19 @@ export default function Footer() {
                     </div>
 
                     {/* Quick Links */}
-                    <div>
-                        <p className="text-sm font-bold text-white mb-4">Quick Links</p>
-                        <ul className="space-y-3">
+                    <div className="min-w-[140px]">
+                        <p className="text-sm font-bold text-white mb-5">Quick Links</p>
+                        <ul className="space-y-3.5">
                             {quickLinks.map((link) => (
-                                <li key={link}>
+                                <li key={link.label}>
                                     <a
-                                        href={`#${link.toLowerCase()}`}
-                                        className="text-sm text-gray-400 hover:text-white transition-colors"
+                                        href={link.href}
+                                        className="text-sm transition-colors"
+                                        style={{ color: "#9CA3AF" }}
+                                        onMouseEnter={hoverWhite}
+                                        onMouseLeave={resetGray}
                                     >
-                                        {link}
+                                        {link.label}
                                     </a>
                                 </li>
                             ))}
@@ -117,18 +133,24 @@ export default function Footer() {
                     </div>
 
                     {/* All Pages */}
-                    <div>
-                        <p className="text-sm font-bold text-white mb-4">All Pages</p>
-                        <ul className="space-y-3">
+                    <div className="min-w-[160px]">
+                        <p className="text-sm font-bold text-white mb-5">All Pages</p>
+                        <ul className="space-y-3.5">
                             {allPages.map((page) => (
                                 <li key={page.label} className="flex items-center gap-2">
-                                    <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
+                                    <a
+                                        href={page.href}
+                                        className="text-sm transition-colors"
+                                        style={{ color: "#9CA3AF" }}
+                                        onMouseEnter={hoverWhite}
+                                        onMouseLeave={resetGray}
+                                    >
                                         {page.label}
                                     </a>
                                     {page.badge && (
                                         <span
-                                            className="text-xs font-bold px-1.5 py-0.5 rounded text-white"
-                                            style={{ background: "#7C3AED" }}
+                                            className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white"
+                                            style={{ background: "#5235EF" }}
                                         >
                                             New
                                         </span>
@@ -141,11 +163,14 @@ export default function Footer() {
 
                 {/* Bottom bar */}
                 <div
-                    className="border-t pt-8 text-center"
-                    style={{ borderColor: "rgba(255,255,255,0.08)" }}
+                    className="border-t py-5 text-center"
+                    style={{ borderColor: "rgba(255,255,255,0.07)" }}
                 >
-                    <p className="text-xs text-gray-600">
-                        © {new Date().getFullYear()} BulkMailer. All rights reserved.
+                    <p className="text-xs" style={{ color: "#4B5563" }}>
+                        Designed by{" "}
+                        <span className="font-bold text-gray-400">BulkMailer</span>
+                        . Powered by{" "}
+                        <span className="font-bold text-gray-400">Next.js</span>
                     </p>
                 </div>
             </div>

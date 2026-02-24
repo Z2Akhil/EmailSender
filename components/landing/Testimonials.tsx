@@ -1,66 +1,154 @@
+"use client";
+
+import { useState } from "react";
+
 const testimonials = [
     {
-        quote:
-            "This tool has completely transformed how our team manages email campaigns. The real-time analytics and seamless integrations make our process so much smoother!",
+        id: 0,
         name: "Emily Ray",
         role: "UX Designer",
-        initials: "ER",
-        gradient: "linear-gradient(135deg,#7C3AED,#EC4899)",
+        company: "PixelCraft",
+        avatarSeed: "emily",
+        quote:
+            "This tool has completely transformed how our team manages email campaigns. The real-time analytics and seamless integrations make our process so much smoother!",
     },
     {
+        id: 1,
+        name: "Sofia Delgado",
+        role: "Product Manager",
+        company: "NovaTech",
+        avatarSeed: "sofia",
         quote:
-            "BulkMailer is ridiculously easy to set up. We went from zero to sending 50k emails in a single afternoon. The deliverability is incredible.",
+            "Before BulkMailer, we juggled five different tools to manage clients, tasks, and reports. Now it's all in one place. We launched 3 campaigns faster this quarter than ever before.",
+    },
+    {
+        id: 2,
         name: "James Kim",
         role: "Growth Lead",
-        initials: "JK",
-        gradient: "linear-gradient(135deg,#3B82F6,#06B6D4)",
+        company: "SkaleCo",
+        avatarSeed: "james",
+        quote:
+            "BulkMailer is ridiculously easy to set up. We went from zero to sending 50k emails in a single afternoon. The deliverability is incredible.",
+    },
+    {
+        id: 3,
+        name: "Jessica Moore",
+        role: "Head of Operations",
+        company: "Align Ventures",
+        avatarSeed: "jessica",
+        quote:
+            "BulkMailer completely changed how we run outreach as a team. It's fast, intuitive, and fits right into our workflow — no learning curve, just results.",
+    },
+    {
+        id: 4,
+        name: "Marcus Lee",
+        role: "Founder",
+        company: "LaunchPad HQ",
+        avatarSeed: "marcus",
+        quote:
+            "I've tried every email tool out there. Nothing comes close to BulkMailer for reliability, speed, and the quality of inbox placement. It's a game-changer.",
     },
 ];
 
-const avatarInitials = ["ER", "JK", "ML", "SR", "TW"];
-const avatarColors = ["#7C3AED", "#3B82F6", "#10B981", "#F59E0B", "#EC4899"];
+// DiceBear illustrated avatars (avataaars style - mimics cartoon portraits)
+function avatarUrl(seed: string) {
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffdfbf,ffd5dc`;
+}
 
 export default function Testimonials() {
+    const [activeId, setActiveId] = useState(0);
+    const [fading, setFading] = useState(false);
+
+    const active = testimonials[activeId];
+
+    const handleSelect = (id: number) => {
+        if (id === activeId) return;
+        setFading(true);
+        setTimeout(() => {
+            setActiveId(id);
+            setFading(false);
+        }, 180);
+    };
+
     return (
-        <section className="py-24 px-6" style={{ background: "#f0f2f6" }}>
-            <div className="max-w-4xl mx-auto text-center">
-                {/* Overlapping avatars */}
-                <div className="flex justify-center mb-6">
-                    {avatarInitials.map((init, i) => (
-                        <div
-                            key={init}
-                            className="w-10 h-10 rounded-full border-2 border-white flex items-center justify-center text-white text-xs font-bold"
+        <section className="py-24 px-6 bg-white">
+            <div className="max-w-6xl mx-auto">
+
+                {/* Main two-column layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+
+                    {/* Left: Heading */}
+                    <div className="lg:pt-4">
+                        <h2
+                            className="font-black text-gray-900 leading-tight"
                             style={{
-                                background: avatarColors[i],
-                                marginLeft: i > 0 ? "-10px" : "0",
-                                zIndex: 5 - i,
+                                fontSize: "clamp(36px, 5vw, 64px)",
+                                letterSpacing: "-0.03em",
                             }}
                         >
-                            {init}
+                            Loved by marketers &amp;
+                            <br />
+                            teams
+                        </h2>
+                    </div>
+
+                    {/* Right: Avatars + Quote */}
+                    <div>
+                        {/* Avatar row — clickable rounded squares */}
+                        <div className="flex items-center gap-2 mb-6">
+                            {testimonials.map((t) => {
+                                const isActive = t.id === activeId;
+                                return (
+                                    <button
+                                        key={t.id}
+                                        onClick={() => handleSelect(t.id)}
+                                        className="relative rounded-2xl overflow-hidden flex-shrink-0 transition-all duration-200"
+                                        style={{
+                                            width: "52px",
+                                            height: "52px",
+                                            outline: isActive
+                                                ? "2.5px solid #5235EF"
+                                                : "2.5px solid transparent",
+                                            outlineOffset: "2px",
+                                            opacity: isActive ? 1 : 0.55,
+                                            transform: isActive ? "scale(1.08)" : "scale(1)",
+                                            background: "#f0f0f0",
+                                        }}
+                                        aria-label={`View ${t.name}'s testimonial`}
+                                    >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                            src={avatarUrl(t.avatarSeed)}
+                                            alt={t.name}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    </button>
+                                );
+                            })}
                         </div>
-                    ))}
+
+                        {/* Quote — fades on switch */}
+                        <div
+                            style={{
+                                opacity: fading ? 0 : 1,
+                                transition: "opacity 180ms ease",
+                            }}
+                        >
+                            <blockquote
+                                className="text-gray-900 font-semibold leading-relaxed mb-4"
+                                style={{ fontSize: "clamp(14px, 1.3vw, 16px)" }}
+                            >
+                                &ldquo;{active.quote}&rdquo;
+                            </blockquote>
+
+                            <p className="text-sm font-semibold">
+                                <span className="text-gray-700">{active.name}, {active.role}, </span>
+                                <span style={{ color: "#5235EF" }}>{active.company}</span>
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Main quote */}
-                <blockquote
-                    className="font-bold leading-tight text-gray-900 mb-8"
-                    style={{ fontSize: "clamp(22px,3.5vw,36px)", letterSpacing: "-0.02em" }}
-                >
-                    &ldquo;{testimonials[0].quote}&rdquo;
-                </blockquote>
-
-                <div className="flex items-center justify-center gap-3">
-                    <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                        style={{ background: testimonials[0].gradient }}
-                    >
-                        {testimonials[0].initials}
-                    </div>
-                    <div className="text-left">
-                        <div className="text-sm font-bold text-gray-900">{testimonials[0].name}</div>
-                        <div className="text-xs text-gray-400">{testimonials[0].role}</div>
-                    </div>
-                </div>
             </div>
         </section>
     );

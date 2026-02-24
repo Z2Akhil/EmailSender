@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Check } from "lucide-react";
 import { useState } from "react";
 
 const plans = [
     {
         name: "Starter plan",
         for: "For individuals & new creators",
-        monthlyPrice: 0,
+        monthlyPrice: 19,
         highlight: false,
         cta: "Get Started",
         features: [
@@ -16,67 +15,67 @@ const plans = [
             "500 contacts",
             "1,000 emails / month",
             "Basic analytics",
+            "Seamless third-party integrations",
             "Community support",
         ],
     },
     {
         name: "Pro plan",
         for: "For freelancers & small teams",
-        monthlyPrice: 19,
+        monthlyPrice: 49,
         highlight: true,
         cta: "Get Started",
         features: [
             "Unlimited campaigns",
             "25,000 contacts",
             "150,000 emails / month",
-            "Real-time analytics",
-            "Seamless integrations",
+            "Real-time collaboration",
+            "Advanced analytics",
+            "Seamless third-party integrations",
             "Email & chat support",
         ],
     },
     {
         name: "Business plan",
         for: "For growing teams & agencies",
-        monthlyPrice: 49,
+        monthlyPrice: 79,
         highlight: false,
         cta: "Get Started",
         features: [
-            "Everything in Pro+",
-            "Unlimited contacts",
-            "Team management",
-            "Priority API & integrations",
-            "Advanced analytics",
+            "Everything in Pro +",
+            "Team management & permissions",
+            "Enhanced security controls",
+            "Priority integrations & API access",
+            "Advanced cloud storage",
             "24/7 priority support",
         ],
     },
 ];
 
 export default function Pricing() {
-    const [yearly, setYearly] = useState(true);
+    const [yearly, setYearly] = useState(false);
 
     const displayPrice = (monthly: number) => {
-        if (monthly === 0) return "$0";
         const amount = yearly ? Math.round(monthly * 0.8) : monthly;
         return `$${amount}`;
     };
 
     return (
-        <section id="pricing" className="py-24 px-6" style={{ background: "#f0f2f6" }}>
+        <section id="pricing" className="py-24 px-6 bg-white">
             <div className="max-w-6xl mx-auto">
+
+                {/* Header */}
                 <div className="text-center mb-12">
-                    <p className="text-gray-500 mb-3 text-sm font-medium uppercase tracking-widest">
-                        Pricing
-                    </p>
                     <h2
-                        className="font-black text-gray-900 mb-4"
-                        style={{ fontSize: "clamp(28px,4vw,48px)", letterSpacing: "-0.03em" }}
+                        className="font-black text-gray-900 mb-3"
+                        style={{ fontSize: "clamp(32px, 4vw, 52px)", letterSpacing: "-0.03em" }}
                     >
-                        Choose a plan that grows with you.
-                        <br />
-                        <span className="text-gray-400 font-medium text-2xl">
-                            Start for free and upgrade anytime.
-                        </span>
+                        Flexible pricing plans
                     </h2>
+                    <p className="text-gray-500 text-base max-w-md mx-auto leading-relaxed">
+                        Choose a plan that grows with you. Start for free and upgrade anytime
+                        for more features and support
+                    </p>
 
                     {/* Toggle */}
                     <div className="flex items-center justify-center gap-3 mt-8">
@@ -94,8 +93,8 @@ export default function Pricing() {
                                 onChange={() => setYearly(!yearly)}
                             />
                             <div
-                                className="absolute inset-0 rounded-full transition-colors"
-                                style={{ background: "#7C3AED" }}
+                                className="absolute inset-0 rounded-full transition-colors duration-300"
+                                style={{ background: yearly ? "#5235EF" : "#D1D5DB" }}
                             />
                             <div
                                 className="absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-all duration-300"
@@ -110,8 +109,8 @@ export default function Pricing() {
                         </span>
                         {yearly && (
                             <span
-                                className="text-xs font-bold px-2 py-0.5 rounded-full text-white"
-                                style={{ background: "#10B981" }}
+                                className="text-xs font-bold px-2 py-0.5 rounded-full"
+                                style={{ color: "#5235EF" }}
                             >
                                 20% off
                             </span>
@@ -119,92 +118,96 @@ export default function Pricing() {
                     </div>
                 </div>
 
+                {/* Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {plans.map((plan) => (
                         <div
                             key={plan.name}
-                            className="rounded-3xl p-8 border transition-all duration-300"
-                            style={
-                                plan.highlight
-                                    ? { background: "#7C3AED", borderColor: "#7C3AED" }
-                                    : { background: "white", borderColor: "#E5E7EB" }
-                            }
+                            className="rounded-2xl p-7 border transition-all duration-300"
+                            style={{
+                                background: "#FFFFFF",
+                                borderColor: "#E5E7EB",
+                                boxShadow: "0 2px 16px rgba(0,0,0,0.06)",
+                            }}
                             onMouseEnter={(e) => {
-                                if (!plan.highlight)
-                                    (e.currentTarget as HTMLDivElement).style.boxShadow =
-                                        "0 8px 40px rgba(0,0,0,0.08)";
+                                (e.currentTarget as HTMLDivElement).style.boxShadow =
+                                    "0 8px 32px rgba(0,0,0,0.10)";
                             }}
                             onMouseLeave={(e) => {
-                                if (!plan.highlight)
-                                    (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
+                                (e.currentTarget as HTMLDivElement).style.boxShadow =
+                                    "0 2px 16px rgba(0,0,0,0.06)";
                             }}
                         >
-                            <div
-                                className="text-sm font-semibold mb-1"
-                                style={{ color: plan.highlight ? "#DDD6FE" : "#6B7280" }}
-                            >
-                                {plan.name}
-                            </div>
-                            <div
-                                className="text-xs mb-6"
-                                style={{ color: plan.highlight ? "#C4B5FD" : "#9CA3AF" }}
-                            >
-                                {plan.for}
-                            </div>
-
-                            <div className="flex items-baseline gap-1 mb-6">
-                                <span
-                                    className="font-black"
-                                    style={{
-                                        fontSize: "52px",
-                                        letterSpacing: "-0.04em",
-                                        lineHeight: 1,
-                                        color: plan.highlight ? "white" : "#111111",
-                                    }}
-                                >
-                                    {displayPrice(plan.monthlyPrice)}
-                                </span>
-                                <span
-                                    className="text-sm"
-                                    style={{ color: plan.highlight ? "#C4B5FD" : "#9CA3AF" }}
-                                >
-                                    {plan.monthlyPrice === 0 ? "/ forever" : "/month"}
-                                </span>
+                            {/* Plan name + price on same row */}
+                            <div className="flex items-start justify-between mb-1">
+                                <div>
+                                    <div className="text-base font-bold text-gray-900">
+                                        {plan.name}
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-0.5">
+                                        {plan.for}
+                                    </div>
+                                </div>
+                                <div className="text-right flex-shrink-0 ml-4">
+                                    <span
+                                        className="font-black"
+                                        style={{
+                                            fontSize: "40px",
+                                            letterSpacing: "-0.04em",
+                                            lineHeight: 1,
+                                            color: "#111111",
+                                        }}
+                                    >
+                                        {displayPrice(plan.monthlyPrice)}
+                                    </span>
+                                    <div className="text-xs text-gray-400 mt-0.5">/month</div>
+                                </div>
                             </div>
 
+                            {/* Divider */}
+                            <div className="border-t border-gray-100 my-5" />
+
+                            {/* CTA */}
                             <Link
                                 href="/signup"
-                                className="block text-center text-sm font-bold py-3 rounded-2xl transition-all"
+                                className="block text-center text-sm font-bold py-3.5 rounded-xl transition-all mb-6"
                                 style={
                                     plan.highlight
-                                        ? { background: "white", color: "#7C3AED" }
+                                        ? {
+                                            background: "linear-gradient(135deg,#5235EF,#7C3AED)",
+                                            color: "white",
+                                        }
                                         : { background: "#111111", color: "white" }
                                 }
                             >
                                 {plan.cta}
                             </Link>
 
-                            <div className="mt-6 space-y-2.5">
-                                <div
-                                    className="text-xs font-semibold uppercase tracking-widest mb-3"
-                                    style={{ color: plan.highlight ? "#C4B5FD" : "#9CA3AF" }}
-                                >
-                                    Included features
-                                </div>
-                                {plan.features.map((feat) => (
-                                    <div key={feat} className="flex items-start gap-2.5">
-                                        <Check
-                                            className="w-4 h-4 shrink-0 mt-0.5"
-                                            style={{ color: plan.highlight ? "white" : "#7C3AED" }}
-                                        />
-                                        <span
-                                            className="text-sm"
-                                            style={{ color: plan.highlight ? "#DDD6FE" : "#4B5563" }}
-                                        >
-                                            {feat}
-                                        </span>
-                                    </div>
-                                ))}
+                            {/* Features */}
+                            <div>
+                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+                                    Included features:
+                                </p>
+                                <ul className="space-y-2.5">
+                                    {plan.features.map((feat) => (
+                                        <li key={feat} className="flex items-start gap-2">
+                                            <span
+                                                className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                                style={{
+                                                    background: plan.highlight
+                                                        ? "#5235EF"
+                                                        : "#111111",
+                                                }}
+                                            />
+                                            <span
+                                                className="text-sm"
+                                                style={{ color: "#374151" }}
+                                            >
+                                                {feat}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
                         </div>
                     ))}

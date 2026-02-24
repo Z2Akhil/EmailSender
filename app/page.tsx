@@ -7,6 +7,7 @@ import Integrations from "@/components/landing/Integrations";
 import DarkFeatures from "@/components/landing/DarkFeatures";
 import Testimonials from "@/components/landing/Testimonials";
 import Pricing from "@/components/landing/Pricing";
+import PerfectSolution from "@/components/landing/PerfectSolution";
 import Footer from "@/components/landing/Footer";
 
 export default function LandingPage() {
@@ -21,6 +22,7 @@ export default function LandingPage() {
       <DarkFeatures />
       <Testimonials />
       <Pricing />
+      <PerfectSolution />
       <Footer />
     </div>
   );
