@@ -20,6 +20,7 @@ interface DomainListProps {
 export function DomainList({ domains, onRefresh }: DomainListProps) {
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
     const toggleExpand = (id: string) => {
         setExpandedId(expandedId === id ? null : id);
@@ -46,6 +47,31 @@ export function DomainList({ domains, onRefresh }: DomainListProps) {
             console.error(error);
         } finally {
             setIsRefreshing(null);
+        }
+    };
+
+    const handleDelete = async (id: string, domainName: string) => {
+        if (!confirm(`Are you sure you want to remove ${domainName}? This cannot be undone.`)) {
+            return;
+        }
+
+        setIsDeleting(id);
+        try {
+            const response = await fetch(`/api/domains/${id}`, {
+                method: 'DELETE',
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                onRefresh();
+            } else {
+                throw new Error(result.error || 'Failed to delete domain');
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Failed to delete domain.");
+        } finally {
+            setIsDeleting(null);
         }
     };
 
@@ -212,14 +238,23 @@ export function DomainList({ domains, onRefresh }: DomainListProps) {
                                         <p className="text-xs text-gray-400 italic">
                                             DNS changes can take up to 48 hours to propagate.
                                         </p>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); verifyStatus(domain._id); }}
-                                            disabled={isRefreshing === domain._id}
-                                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
-                                        >
-                                            {isRefreshing === domain._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                            Verify Now
-                                        </button>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(domain._id, domain.domainName); }}
+                                                disabled={isDeleting === domain._id}
+                                                className="flex items-center gap-2 text-sm text-red-500 hover:text-red-600 font-medium transition-colors disabled:opacity-50"
+                                            >
+                                                {isDeleting === domain._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Remove Domain
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); verifyStatus(domain._id); }}
+                                                disabled={isRefreshing === domain._id || isDeleting === domain._id}
+                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                            >
+                                                {isRefreshing === domain._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                                Verify Now
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
@@ -233,8 +268,12 @@ export function DomainList({ domains, onRefresh }: DomainListProps) {
                                     </div>
 
                                     <div className="mt-6 flex justify-end">
-                                        <button className="flex items-center gap-2 text-sm text-red-500 hover:text-red-600 font-medium transition-colors">
-                                            <Trash2 className="w-4 h-4" /> Remove Domain
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(domain._id, domain.domainName); }}
+                                            disabled={isDeleting === domain._id}
+                                            className="flex items-center gap-2 text-sm text-red-500 hover:text-red-600 font-medium transition-colors disabled:opacity-50"
+                                        >
+                                            {isDeleting === domain._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Remove Domain
                                         </button>
                                     </div>
                                 </div>

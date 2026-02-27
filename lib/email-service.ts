@@ -4,7 +4,8 @@ import {
     VerifyDomainIdentityCommand,
     GetIdentityVerificationAttributesCommand,
     VerifyDomainDkimCommand,
-    GetIdentityDkimAttributesCommand
+    GetIdentityDkimAttributesCommand,
+    DeleteIdentityCommand
 } from "@aws-sdk/client-ses";
 import nodemailer from "nodemailer";
 
@@ -162,6 +163,12 @@ export const getDomainDkimStatus = async (domain: string) => {
         tokens: attributes?.DkimTokens || [],
         status: attributes?.DkimVerificationStatus || "NOT_STARTED",
     };
+};
+
+export const deleteDomainIdentity = async (domain: string) => {
+    const command = new DeleteIdentityCommand({ Identity: domain });
+    await sesClient.send(command);
+    return true;
 };
 
 export const injectComplianceFooter = (html: string, unsubscribeUrl: string) => {
