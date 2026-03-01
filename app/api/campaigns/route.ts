@@ -9,15 +9,22 @@ import { z } from "zod";
 
 const campaignSchema = z.object({
     name: z.string().min(1, "Campaign name is required"),
-    subject: z.string().min(1, "Subject is required"),
-    fromName: z.string().min(1, "From name is required"),
-    fromEmail: z.string().email("Invalid from email"),
+    channel: z.enum(["EMAIL", "WHATSAPP"]).optional().default("EMAIL"),
+    subject: z.string().optional(),
+    fromName: z.string().optional(),
+    fromEmail: z.string().email("Invalid from email").optional().or(z.literal("")),
     replyTo: z.string().email("Invalid reply-to email").optional().or(z.literal("")),
-    provider: z.enum(["SES", "SMTP"]).optional().default("SES"),
+    provider: z.enum(["SES", "SMTP", "WHATSAPP"]).optional().default("SES"),
     templateId: z.string().optional(),
     domainId: z.string().optional().or(z.literal("")),
-    htmlContent: z.string().min(1, "Content is required"),
+    htmlContent: z.string().optional(),
     recipientListId: z.string().min(1, "Recipient list is required"),
+}).superRefine((data, ctx) => {
+    if (data.channel === "EMAIL") {
+        if (!data.subject) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Subject is required", path: ["subject"] });
+        if (!data.fromName) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "From name is required", path: ["fromName"] });
+        if (!data.fromEmail) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "From email is required", path: ["fromEmail"] });
+    }
 });
 
 export async function GET(req: NextRequest) {
@@ -54,7 +61,7 @@ export async function POST(req: NextRequest) {
 
         // Handle empty string for domainId by deleting it so Mongoose doesn't throw a CastError
         if (validated.domainId === "") {
-            delete validated.domainId;
+            delete (validated as any).domainId;
         }
 
         // Fetch the list to get the actual contact count

@@ -67,6 +67,7 @@ export async function GET(
             lastName: c.lastName ?? null,
             company: c.company ?? null,
             phone: c.phone ?? null,
+            whatsappNumber: c.whatsappNumber ?? null,
             listId: c.listId.toString(),
             status: c.status,
             createdAt: c.createdAt,
@@ -91,7 +92,7 @@ export async function GET(
 }
 
 // POST /api/contacts/lists/[id]/contacts
-// Body: { email, firstName?, lastName?, company?, phone? }
+// Body: { email, firstName?, lastName?, company?, phone?, whatsappNumber? }
 export async function POST(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -118,7 +119,7 @@ export async function POST(
         }
 
         const body = await req.json();
-        const { email, firstName, lastName, company, phone } = body;
+        const { email, firstName, lastName, company, phone, whatsappNumber } = body;
 
         if (!email || typeof email !== "string") {
             return NextResponse.json({ success: false, error: "Email is required" }, { status: 400 });
@@ -151,6 +152,7 @@ export async function POST(
             lastName: lastName?.trim() || undefined,
             company: company?.trim() || undefined,
             phone: phone?.trim() || undefined,
+            whatsappNumber: whatsappNumber?.replace(/[^0-9]/g, "") || undefined, // Sanitize to numeric
             listId: id,
             workspaceId: session.user.workspaceId,
             status: "ACTIVE",
@@ -168,6 +170,7 @@ export async function POST(
                 lastName: contact.lastName ?? null,
                 company: contact.company ?? null,
                 phone: contact.phone ?? null,
+                whatsappNumber: contact.whatsappNumber ?? null,
                 listId: contact.listId.toString(),
                 status: contact.status,
                 createdAt: contact.createdAt,

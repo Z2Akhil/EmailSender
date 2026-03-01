@@ -18,12 +18,13 @@ interface ColumnMapping {
     lastName?: string;
     company?: string;
     phone?: string;
+    whatsappNumber?: string;
 }
 
 // POST /api/contacts/lists/[id]/import
 // Accepts multipart/form-data with:
 //   - file: CSV or XLSX file
-//   - mapping: JSON string of { email, firstName?, lastName?, company?, phone? } column names
+//   - mapping: JSON string of { email, firstName?, lastName?, company?, phone?, whatsappNumber? } column names
 export async function POST(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -139,6 +140,7 @@ export async function POST(
                     lastName: mapping.lastName ? row[mapping.lastName]?.toString().trim() || undefined : undefined,
                     company: mapping.company ? row[mapping.company]?.toString().trim() || undefined : undefined,
                     phone: mapping.phone ? row[mapping.phone]?.toString().trim() || undefined : undefined,
+                    whatsappNumber: mapping.whatsappNumber ? row[mapping.whatsappNumber]?.toString().replace(/[^0-9]/g, "") || undefined : undefined,
                     listId: id,
                     workspaceId: session.user.workspaceId,
                     status: "ACTIVE",

@@ -15,6 +15,10 @@ export interface IWorkspace extends Document {
     smtpUser?: string;
     smtpPass?: string;
     smtpSecure?: boolean;
+    // WhatsApp Configuration
+    whatsappAccessToken?: string;
+    whatsappPhoneNumberId?: string;
+    whatsappBusinessAccountId?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -49,6 +53,10 @@ const WorkspaceSchema = new Schema<IWorkspace>(
         smtpUser: { type: String, trim: true },
         smtpPass: { type: String }, // Should be encrypted in production
         smtpSecure: { type: Boolean, default: true },
+        // WhatsApp Config
+        whatsappAccessToken: { type: String }, // Should be encrypted
+        whatsappPhoneNumberId: { type: String },
+        whatsappBusinessAccountId: { type: String },
     },
     {
         timestamps: true,

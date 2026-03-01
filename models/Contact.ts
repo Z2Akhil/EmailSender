@@ -16,6 +16,8 @@ export interface IContact extends Document {
     lastName?: string;
     company?: string;
     phone?: string;
+    whatsappNumber?: string;
+    whatsappOptIn?: boolean;
     listId: mongoose.Types.ObjectId;
     workspaceId: mongoose.Types.ObjectId;
     status: "ACTIVE" | "UNSUBSCRIBED" | "BOUNCED";
@@ -43,6 +45,8 @@ const ContactSchema = new Schema<IContact>(
         lastName: { type: String, trim: true },
         company: { type: String, trim: true },
         phone: { type: String, trim: true },
+        whatsappNumber: { type: String, trim: true },
+        whatsappOptIn: { type: Boolean, default: false },
         listId: { type: Schema.Types.ObjectId, ref: "ContactList", required: true },
         workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
         status: {

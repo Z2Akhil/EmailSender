@@ -4,10 +4,15 @@ export interface ITemplate extends Document {
     _id: mongoose.Types.ObjectId;
     name: string;
     description?: string;
-    htmlContent: string;
+    type: "EMAIL" | "WHATSAPP";
+    htmlContent?: string;
+    textContent?: string;
     thumbnail?: string;
     workspaceId?: mongoose.Types.ObjectId;
     isGlobal: boolean;
+    whatsappTemplateName?: string;
+    whatsappTemplateLanguage?: string;
+    whatsappTemplateComponents?: any[];
     createdAt: Date;
     updatedAt: Date;
 }
@@ -16,10 +21,15 @@ const TemplateSchema = new Schema<ITemplate>(
     {
         name: { type: String, required: true, trim: true },
         description: { type: String, trim: true },
-        htmlContent: { type: String, required: true },
+        type: { type: String, enum: ["EMAIL", "WHATSAPP"], default: "EMAIL" },
+        htmlContent: { type: String }, // Optional for WhatsApp
+        textContent: { type: String },
         thumbnail: { type: String },
         workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace" },
         isGlobal: { type: Boolean, default: false },
+        whatsappTemplateName: { type: String },
+        whatsappTemplateLanguage: { type: String },
+        whatsappTemplateComponents: [{ type: Schema.Types.Mixed }],
     },
     {
         timestamps: true,

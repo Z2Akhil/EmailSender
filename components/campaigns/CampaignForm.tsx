@@ -7,6 +7,7 @@ import {
     ArrowLeft, Check, ChevronRight, Settings, Layout,
     FileText, Users, Send, Loader2, Search, Plus, LayoutGrid, List
 } from "lucide-react";
+import { MessageCircle, Mail } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Campaign, Template, ContactList, Domain, ApiResponse } from "@/types";
@@ -46,6 +47,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         recipientListId: initialData?.recipientListId || "",
         domainId: initialData?.domainId || "",
         provider: (initialData as any)?.provider || "SES",
+        channel: initialData?.channel || "EMAIL",
     });
 
     const urlTemplateId = searchParams.get("templateId");
@@ -67,7 +69,8 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                 textContent: initialData.textContent || "",
                 recipientListId: initialData.recipientListId || "",
                 domainId: initialData.domainId || "",
-                provider: (initialData as any).provider || "SES"
+                provider: (initialData as any).provider || "SES",
+                channel: initialData.channel || "EMAIL",
             });
         }
     }, [initialData]);
@@ -143,8 +146,9 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
     const verifiedDomains = domainsData?.data?.filter(d => d.verificationStatus === "VERIFIED") || [];
     const isSmtpConfigured = !!smtpData?.data?.smtpHost;
     const filteredTemplates = templates.filter(t =>
-        t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
-        t.description?.toLowerCase().includes(templateSearch.toLowerCase())
+        (t.type === formData.channel || (!t.type && formData.channel === "EMAIL")) &&
+        (t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
+            t.description?.toLowerCase().includes(templateSearch.toLowerCase()))
     );
 
     const lists = listsData?.data || [];
@@ -295,6 +299,30 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
 
                         <div className="space-y-6">
                             <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700">Messaging Channel</label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, channel: "EMAIL" })}
+                                        className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${formData.channel === "EMAIL" ? "border-blue-600 bg-blue-50/50" : "border-gray-100 hover:border-gray-200"
+                                            }`}
+                                    >
+                                        <Mail className={`w-6 h-6 mb-2 ${formData.channel === "EMAIL" ? "text-blue-600" : "text-gray-400"}`} />
+                                        <span className={`text-sm font-bold ${formData.channel === "EMAIL" ? "text-blue-900" : "text-gray-600"}`}>Email</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, channel: "WHATSAPP" })}
+                                        className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${formData.channel === "WHATSAPP" ? "border-green-600 bg-green-50/50" : "border-gray-100 hover:border-gray-200"
+                                            }`}
+                                    >
+                                        <MessageCircle className={`w-6 h-6 mb-2 ${formData.channel === "WHATSAPP" ? "text-green-600" : "text-gray-400"}`} />
+                                        <span className={`text-sm font-bold ${formData.channel === "WHATSAPP" ? "text-green-900" : "text-gray-600"}`}>WhatsApp</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
                                 <label className="text-sm font-semibold text-gray-700">Internal Campaign Name</label>
                                 <input
                                     type="text"
@@ -306,127 +334,131 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                 <p className="text-[11px] text-gray-400">This will not be visible to your recipients.</p>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700">Email Subject Line</label>
-                                <input
-                                    type="text"
-                                    placeholder="Something catchy..."
-                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                    value={formData.subject}
-                                    onChange={e => setFormData({ ...formData, subject: e.target.value })}
-                                />
-                            </div>
-
-                            {(verifiedDomains.length > 0 && isSmtpConfigured) && (
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-gray-700">Email Provider</label>
-                                    <div className="flex bg-gray-50 p-1 rounded-xl w-fit border border-gray-100">
-                                        <button
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, provider: "SES", domainId: verifiedDomains[0]?._id || verifiedDomains[0]?.id || "" })}
-                                            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${formData.provider === "SES" ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"
-                                                }`}
-                                        >
-                                            Amazon SES
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFormData({
-                                                ...formData,
-                                                provider: "SMTP",
-                                                domainId: "",
-                                                fromEmail: smtpData?.data?.smtpUser || formData.fromEmail
-                                            })}
-                                            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${formData.provider === "SMTP" ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"
-                                                }`}
-                                        >
-                                            Custom SMTP
-                                        </button>
+                            {formData.channel === "EMAIL" && (
+                                <>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-gray-700">Email Subject Line</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Something catchy..."
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                            value={formData.subject}
+                                            onChange={e => setFormData({ ...formData, subject: e.target.value })}
+                                        />
                                     </div>
-                                </div>
-                            )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-gray-700">From Name</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. John from BulkMailer"
-                                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                        value={formData.fromName}
-                                        onChange={e => setFormData({ ...formData, fromName: e.target.value })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-gray-700">From Email Address</label>
-                                    {formData.provider === "SES" ? (
-                                        <>
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    placeholder="hello"
-                                                    className="w-1/2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all text-right"
-                                                    value={formData.fromEmail.split("@")[0]}
-                                                    onChange={e => {
-                                                        const prefix = e.target.value;
-                                                        const domain = formData.fromEmail.split("@")[1] || (verifiedDomains[0]?.domainName || "");
-                                                        setFormData({ ...formData, fromEmail: `${prefix}@${domain}` });
-                                                    }}
-                                                />
-                                                <div className="flex items-center text-gray-400">@</div>
-                                                <select
-                                                    className="w-1/2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                                    value={formData.domainId || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?._id || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?.id || ""}
-                                                    onChange={e => {
-                                                        const domainId = e.target.value;
-                                                        const domain = verifiedDomains.find(d => d._id === domainId || d.id === domainId);
-                                                        if (domain) {
-                                                            const prefix = formData.fromEmail.split("@")[0] || "hello";
-                                                            setFormData({
-                                                                ...formData,
-                                                                domainId,
-                                                                fromEmail: `${prefix}@${domain.domainName}`
-                                                            });
-                                                        }
-                                                    }}
+                                    {(verifiedDomains.length > 0 && isSmtpConfigured) && (
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-semibold text-gray-700">Email Provider</label>
+                                            <div className="flex bg-gray-50 p-1 rounded-xl w-fit border border-gray-100">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData({ ...formData, provider: "SES", domainId: verifiedDomains[0]?._id || verifiedDomains[0]?.id || "" })}
+                                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${formData.provider === "SES" ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"
+                                                        }`}
                                                 >
-                                                    <option value="" disabled>Select Domain</option>
-                                                    {verifiedDomains.map(d => (
-                                                        <option key={d._id || d.id} value={d._id || d.id}>{d.domainName}</option>
-                                                    ))}
-                                                    {verifiedDomains.length === 0 && (
-                                                        <option value="" disabled>No verified domains</option>
-                                                    )}
-                                                </select>
+                                                    Amazon SES
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData({
+                                                        ...formData,
+                                                        provider: "SMTP",
+                                                        domainId: "",
+                                                        fromEmail: smtpData?.data?.smtpUser || formData.fromEmail
+                                                    })}
+                                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${formData.provider === "SMTP" ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"
+                                                        }`}
+                                                >
+                                                    Custom SMTP
+                                                </button>
                                             </div>
-                                            {verifiedDomains.length === 0 && (
-                                                <p className="text-[11px] text-amber-600 flex items-center gap-1 mt-1">
-                                                    <Plus className="w-3 h-3" />
-                                                    No verified domains found. <Link href="/dashboard/settings/domains" className="underline">Add one in settings</Link>.
-                                                </p>
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-semibold text-gray-700">From Name</label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. John from BulkMailer"
+                                                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                                value={formData.fromName}
+                                                onChange={e => setFormData({ ...formData, fromName: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-semibold text-gray-700">From Email Address</label>
+                                            {formData.provider === "SES" ? (
+                                                <>
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="hello"
+                                                            className="w-1/2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all text-right"
+                                                            value={formData.fromEmail.split("@")[0]}
+                                                            onChange={e => {
+                                                                const prefix = e.target.value;
+                                                                const domain = formData.fromEmail.split("@")[1] || (verifiedDomains[0]?.domainName || "");
+                                                                setFormData({ ...formData, fromEmail: `${prefix}@${domain}` });
+                                                            }}
+                                                        />
+                                                        <div className="flex items-center text-gray-400">@</div>
+                                                        <select
+                                                            className="w-1/2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                                            value={formData.domainId || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?._id || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?.id || ""}
+                                                            onChange={e => {
+                                                                const domainId = e.target.value;
+                                                                const domain = verifiedDomains.find(d => d._id === domainId || d.id === domainId);
+                                                                if (domain) {
+                                                                    const prefix = formData.fromEmail.split("@")[0] || "hello";
+                                                                    setFormData({
+                                                                        ...formData,
+                                                                        domainId,
+                                                                        fromEmail: `${prefix}@${domain.domainName}`
+                                                                    });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <option value="" disabled>Select Domain</option>
+                                                            {verifiedDomains.map(d => (
+                                                                <option key={d._id || d.id} value={d._id || d.id}>{d.domainName}</option>
+                                                            ))}
+                                                            {verifiedDomains.length === 0 && (
+                                                                <option value="" disabled>No verified domains</option>
+                                                            )}
+                                                        </select>
+                                                    </div>
+                                                    {verifiedDomains.length === 0 && (
+                                                        <p className="text-[11px] text-amber-600 flex items-center gap-1 mt-1">
+                                                            <Plus className="w-3 h-3" />
+                                                            No verified domains found. <Link href="/dashboard/settings/domains" className="underline">Add one in settings</Link>.
+                                                        </p>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <input
+                                                    type="email"
+                                                    placeholder="hello@yourbrand.com"
+                                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                                    value={formData.fromEmail}
+                                                    onChange={e => setFormData({ ...formData, fromEmail: e.target.value })}
+                                                />
                                             )}
-                                        </>
-                                    ) : (
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-gray-700">Reply-to Email (Optional)</label>
                                         <input
                                             type="email"
-                                            placeholder="hello@yourbrand.com"
+                                            placeholder="support@yourbrand.com"
                                             className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                            value={formData.fromEmail}
-                                            onChange={e => setFormData({ ...formData, fromEmail: e.target.value })}
+                                            value={formData.replyTo}
+                                            onChange={e => setFormData({ ...formData, replyTo: e.target.value })}
                                         />
-                                    )}
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700">Reply-to Email (Optional)</label>
-                                <input
-                                    type="email"
-                                    placeholder="support@yourbrand.com"
-                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                    value={formData.replyTo}
-                                    onChange={e => setFormData({ ...formData, replyTo: e.target.value })}
-                                />
-                            </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
@@ -614,13 +646,16 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
 
                         <div className="flex-1 border border-gray-100 rounded-2xl overflow-hidden flex flex-col">
                             <div className="bg-gray-50 border-b border-gray-100 p-2 flex items-center gap-2">
-                                <div className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">HTML Editor</div>
+                                <div className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                    {formData.channel === "WHATSAPP" ? "Content (Read Only)" : "HTML Editor"}
+                                </div>
                             </div>
                             <textarea
                                 className="flex-1 w-full p-6 font-mono text-sm resize-none focus:outline-none bg-white"
                                 value={formData.htmlContent}
-                                onChange={e => setFormData({ ...formData, htmlContent: e.target.value })}
-                                placeholder="Your email HTML content..."
+                                onChange={e => formData.channel !== "WHATSAPP" && setFormData({ ...formData, htmlContent: e.target.value })}
+                                readOnly={formData.channel === "WHATSAPP"}
+                                placeholder={formData.channel === "WHATSAPP" ? "WhatsApp Templates are managed via Meta." : "Your email HTML content..."}
                             />
                         </div>
 
@@ -658,13 +693,21 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                             <dd className="text-sm font-semibold text-gray-900">{formData.name}</dd>
                                         </div>
                                         <div>
-                                            <dt className="text-xs text-gray-500">Subject Line</dt>
-                                            <dd className="text-sm font-semibold text-gray-900">{formData.subject}</dd>
+                                            <dt className="text-xs text-gray-500">Channel</dt>
+                                            <dd className="text-sm font-semibold text-gray-900">{formData.channel === "WHATSAPP" ? "WhatsApp" : "Email"}</dd>
                                         </div>
-                                        <div>
-                                            <dt className="text-xs text-gray-500">From</dt>
-                                            <dd className="text-sm font-semibold text-gray-900">{formData.fromName} &lt;{formData.fromEmail}&gt;</dd>
-                                        </div>
+                                        {formData.channel === "EMAIL" && (
+                                            <>
+                                                <div>
+                                                    <dt className="text-xs text-gray-500">Subject Line</dt>
+                                                    <dd className="text-sm font-semibold text-gray-900">{formData.subject}</dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="text-xs text-gray-500">From</dt>
+                                                    <dd className="text-sm font-semibold text-gray-900">{formData.fromName} &lt;{formData.fromEmail}&gt;</dd>
+                                                </div>
+                                            </>
+                                        )}
                                     </dl>
                                 </div>
 
@@ -742,10 +785,13 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                         onClick={handleNext}
                         disabled={
                             isTemplateLoading ||
-                            (currentStep === "SETTINGS" && (!formData.name || !formData.subject || !formData.fromName || !formData.fromEmail)) ||
+                            (currentStep === "SETTINGS" && (
+                                !formData.name ||
+                                (formData.channel === "EMAIL" && (!formData.subject || !formData.fromName || !formData.fromEmail))
+                            )) ||
                             (currentStep === "TEMPLATE" && !formData.templateId) ||
                             (currentStep === "RECIPIENTS" && !formData.recipientListId) ||
-                            (currentStep === "CONTENT" && !formData.htmlContent)
+                            (currentStep === "CONTENT" && !formData.htmlContent && formData.channel === "EMAIL")
                         }
                         className="flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-200"
                     >

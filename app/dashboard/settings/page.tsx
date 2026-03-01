@@ -45,6 +45,17 @@ export default function SettingsPage() {
                         </p>
                     </div>
                 </Link>
+                <Link href="/dashboard/settings/whatsapp" className="group">
+                    <div className="bg-white rounded-2xl border border-gray-100 p-6 hover:border-green-200 hover:ring-4 hover:ring-green-50 transition-all">
+                        <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <SettingsIcon className="w-6 h-6 text-green-600" />
+                        </div>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-1">WhatsApp Integration</h2>
+                        <p className="text-gray-500 text-sm">
+                            Connect your Meta Business account for WhatsApp messaging.
+                        </p>
+                    </div>
+                </Link>
             </div>
         </div>
     );

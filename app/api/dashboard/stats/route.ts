@@ -25,17 +25,23 @@ export async function GET(req: NextRequest) {
             status: "SENT"
         });
 
-        // 3. Total Emails Sent
+        // 3. Segmented Stats
         const campaigns = await Campaign.find({ workspaceId, status: "SENT" });
-        const totalEmailsSent = campaigns.reduce((acc, c) => acc + (c.sentCount || 0), 0);
 
-        // 4. Avg Open Rate
-        const totalOpens = campaigns.reduce((acc, c) => acc + (c.openCount || 0), 0);
-        const avgOpenRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0;
+        const emailCampaigns = campaigns.filter(c => c.channel !== "WHATSAPP");
+        const whatsappCampaigns = campaigns.filter(c => c.channel === "WHATSAPP");
 
-        // 5. Avg Click Rate
-        const totalClicks = campaigns.reduce((acc, c) => acc + (c.clickCount || 0), 0);
-        const avgClickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0;
+        const totalEmailsSent = emailCampaigns.reduce((acc, c) => acc + (c.sentCount || 0), 0);
+        const totalWhatsappSent = whatsappCampaigns.reduce((acc, c) => acc + (c.sentCount || 0), 0);
+
+        const emailOpens = emailCampaigns.reduce((acc, c) => acc + (c.openCount || 0), 0);
+        const avgEmailOpenRate = totalEmailsSent > 0 ? (emailOpens / totalEmailsSent) * 100 : 0;
+
+        const whatsappOpens = whatsappCampaigns.reduce((acc, c) => acc + (c.openCount || 0), 0);
+        const avgWhatsappOpenRate = totalWhatsappSent > 0 ? (whatsappOpens / totalWhatsappSent) * 100 : 0;
+
+        const emailClicks = emailCampaigns.reduce((acc, c) => acc + (c.clickCount || 0), 0);
+        const avgEmailClickRate = totalEmailsSent > 0 ? (emailClicks / totalEmailsSent) * 100 : 0;
 
         // 6. Recent Campaigns
         const recentCampaigns = await Campaign.find({ workspaceId })
@@ -48,8 +54,10 @@ export async function GET(req: NextRequest) {
                 totalContacts,
                 totalCampaigns,
                 totalEmailsSent,
-                avgOpenRate,
-                avgClickRate,
+                totalWhatsappSent,
+                avgEmailOpenRate,
+                avgWhatsappOpenRate,
+                avgEmailClickRate,
                 recentCampaigns
             }
         });

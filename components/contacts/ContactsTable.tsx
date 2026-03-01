@@ -72,6 +72,7 @@ export function ContactsTable({
                             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3.5">Email</th>
                             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5">Name</th>
                             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5 hidden md:table-cell">Company</th>
+                            <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5 hidden sm:table-cell">WhatsApp</th>
                             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5">Status</th>
                             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5 hidden lg:table-cell">Added</th>
                             <th className="px-4 py-3.5" />
@@ -90,6 +91,9 @@ export function ContactsTable({
                                 </td>
                                 <td className="px-4 py-4 text-gray-600 hidden md:table-cell">
                                     {contact.company || <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="px-4 py-4 text-gray-600 hidden sm:table-cell font-mono text-xs">
+                                    {contact.whatsappNumber || <span className="text-gray-300">—</span>}
                                 </td>
                                 <td className="px-4 py-4">
                                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_BADGE[contact.status]}`}>

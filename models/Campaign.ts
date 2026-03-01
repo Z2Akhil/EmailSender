@@ -13,7 +13,8 @@ export interface ICampaign extends Document {
     scheduledAt?: Date;
     sentAt?: Date;
     workspaceId: mongoose.Types.ObjectId;
-    provider?: "SES" | "SMTP";
+    channel: "EMAIL" | "WHATSAPP";
+    provider?: "SES" | "SMTP" | "WHATSAPP";
     domainId?: mongoose.Types.ObjectId;
     templateId?: mongoose.Types.ObjectId;
     recipientListId?: mongoose.Types.ObjectId;
@@ -33,7 +34,8 @@ export interface ICampaignRecipient extends Document {
     campaignId: mongoose.Types.ObjectId;
     contactId: mongoose.Types.ObjectId;
     email: string;
-    status: "PENDING" | "DELIVERED" | "OPENED" | "CLICKED" | "BOUNCED" | "UNSUBSCRIBED" | "FAILED";
+    messageId?: string;
+    status: "PENDING" | "DELIVERED" | "OPENED" | "CLICKED" | "BOUNCED" | "UNSUBSCRIBED" | "FAILED" | "READ" | "SENT";
     openedAt?: Date;
     clickedAt?: Date;
     bouncedAt?: Date;
@@ -44,8 +46,8 @@ export interface ICampaignRecipient extends Document {
 const CampaignSchema = new Schema<ICampaign>(
     {
         name: { type: String, required: true, trim: true },
-        subject: { type: String, required: true, trim: true },
-        htmlContent: { type: String, required: true },
+        subject: { type: String, trim: true }, // Optional for WhatsApp
+        htmlContent: { type: String }, // Optional for WhatsApp
         textContent: { type: String },
         fromName: { type: String, required: true, trim: true },
         fromEmail: { type: String, required: true, lowercase: true, trim: true },
@@ -58,7 +60,8 @@ const CampaignSchema = new Schema<ICampaign>(
         scheduledAt: { type: Date },
         sentAt: { type: Date },
         workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
-        provider: { type: String, enum: ["SES", "SMTP"], default: "SES" },
+        channel: { type: String, enum: ["EMAIL", "WHATSAPP"], default: "EMAIL" },
+        provider: { type: String, enum: ["SES", "SMTP", "WHATSAPP"], default: "SES" },
         domainId: { type: Schema.Types.ObjectId, ref: "Domain" },
         templateId: { type: Schema.Types.ObjectId, ref: "Template" },
         recipientListId: { type: Schema.Types.ObjectId, ref: "ContactList" },
@@ -87,9 +90,10 @@ const CampaignRecipientSchema = new Schema<ICampaignRecipient>(
         campaignId: { type: Schema.Types.ObjectId, ref: "Campaign", required: true },
         contactId: { type: Schema.Types.ObjectId, ref: "Contact", required: true },
         email: { type: String, required: true, lowercase: true },
+        messageId: { type: String },
         status: {
             type: String,
-            enum: ["PENDING", "DELIVERED", "OPENED", "CLICKED", "BOUNCED", "UNSUBSCRIBED", "FAILED"],
+            enum: ["PENDING", "DELIVERED", "OPENED", "CLICKED", "BOUNCED", "UNSUBSCRIBED", "FAILED", "READ", "SENT"],
             default: "PENDING",
         },
         openedAt: { type: Date },

@@ -13,6 +13,7 @@ interface ColumnMapping {
     lastName: string;
     company: string;
     phone: string;
+    whatsappNumber: string;
 }
 
 interface ImportResult {
@@ -42,6 +43,7 @@ function UploadPageContent() {
         lastName: "",
         company: "",
         phone: "",
+        whatsappNumber: "",
     });
     const [isImporting, setIsImporting] = useState(false);
     const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -104,6 +106,7 @@ function UploadPageContent() {
             lastName: find(["lastname", "last_name", "last name", "lname"]),
             company: find(["company", "organization", "org"]),
             phone: find(["phone", "phone number", "mobile", "tel"]),
+            whatsappNumber: find(["whatsapp", "wa", "whatsapp number"]),
         });
     };
 
@@ -149,7 +152,7 @@ function UploadPageContent() {
         setFile(null);
         setHeaders([]);
         setPreviewRows([]);
-        setMapping({ email: "", firstName: "", lastName: "", company: "", phone: "" });
+        setMapping({ email: "", firstName: "", lastName: "", company: "", phone: "", whatsappNumber: "" });
         setImportResult(null);
         setParseError("");
     };
@@ -283,6 +286,7 @@ function UploadPageContent() {
                                 { key: "lastName", label: "Last Name" },
                                 { key: "company", label: "Company" },
                                 { key: "phone", label: "Phone" },
+                                { key: "whatsappNumber", label: "WhatsApp" },
                             ].map(({ key, label, required }) => (
                                 <div key={key} className="flex items-center gap-4">
                                     <label className="w-32 text-sm font-medium text-gray-700 shrink-0">

@@ -4,7 +4,9 @@ import { connectDB } from "./db";
 import { Campaign, CampaignRecipient } from "@/models/Campaign";
 import Domain from "@/models/Domain";
 import { Workspace } from "@/models/Workspace";
+import { Template } from "@/models/Template";
 import { sendEmail, injectComplianceFooter } from "./email-service";
+import { sendWhatsappMessage } from "./whatsapp-service";
 import { decrypt } from "./crypto";
 import mongoose from "mongoose";
 
@@ -164,3 +166,115 @@ export const initWorker = () => {
 
     return worker;
 };
+
+export const initWhatsappWorker = () => {
+    const worker = new Worker(
+        "whatsapp-queue",
+        async (job: Job) => {
+            const { campaignId, contactId, recipientPhone, recipientName } = job.data;
+
+            try {
+                await connectDB();
+
+                const campaign = await Campaign.findById(campaignId);
+                if (!campaign) {
+                    throw new Error(`Campaign ${campaignId} not found`);
+                }
+
+                if (campaign.status === "CANCELLED") {
+                    return { skipped: true, reason: "Campaign cancelled" };
+                }
+
+                const workspace = await Workspace.findById(campaign.workspaceId);
+                if (!workspace || !workspace.whatsappAccessToken || !workspace.whatsappPhoneNumberId) {
+                    throw new Error(`WhatsApp not configured for Workspace ${campaign.workspaceId}`);
+                }
+
+                const template = await Template.findById(campaign.templateId);
+                if (!template || template.type !== "WHATSAPP") {
+                    throw new Error(`Valid WhatsApp template not found for Campaign ${campaignId}`);
+                }
+
+                // Wait / Rate Limit Logic (BullMQ concurrency also helps)
+                // Just use the API since it handles some bursts, Meta recommends ~80 msg/sec minimum tier
+
+                const recipientStatus = await CampaignRecipient.findOneAndUpdate(
+                    { campaignId, contactId },
+                    {
+                        email: recipientPhone, // We reuse 'email' field or add 'phone' field, for now 'email' field in Recipient might store phone number if we reuse
+                        status: "PENDING",
+                        updatedAt: new Date()
+                    },
+                    { upsert: true, new: true }
+                );
+
+                const result = await sendWhatsappMessage({
+                    to: recipientPhone,
+                    templateName: template.whatsappTemplateName || "",
+                    languageCode: template.whatsappTemplateLanguage || "en_US",
+                    components: template.whatsappTemplateComponents,
+                    accessToken: workspace.whatsappAccessToken,
+                    phoneNumberId: workspace.whatsappPhoneNumberId
+                });
+
+                // The messageId from Meta can be mapped here to the CampaignRecipient if we add a field for it
+
+                await CampaignRecipient.findByIdAndUpdate(recipientStatus._id, {
+                    status: "SENT", // Initially SENT until Webhook updates to DELIVERED/READ
+                    updatedAt: new Date()
+                });
+
+                const updatedCampaign = await Campaign.findByIdAndUpdate(campaignId, {
+                    $inc: { sentCount: 1 }
+                }, { new: true });
+
+                if (updatedCampaign && (updatedCampaign.sentCount + updatedCampaign.failedCount >= updatedCampaign.totalRecipients)) {
+                    await Campaign.findByIdAndUpdate(campaignId, { status: "SENT" });
+                }
+
+                return { success: true, messageId: result.messages?.[0]?.id };
+
+            } catch (error: any) {
+                console.error(`Failed to process whatsapp job ${job.id}:`, error);
+
+                await CampaignRecipient.findOneAndUpdate(
+                    { campaignId, contactId },
+                    {
+                        status: "FAILED",
+                        updatedAt: new Date()
+                    },
+                    { upsert: true }
+                );
+
+                const updatedCampaign = await Campaign.findByIdAndUpdate(campaignId, {
+                    $inc: { failedCount: 1 }
+                }, { new: true });
+
+                if (updatedCampaign && (updatedCampaign.sentCount + updatedCampaign.failedCount >= updatedCampaign.totalRecipients)) {
+                    await Campaign.findByIdAndUpdate(campaignId, { status: "SENT" });
+                }
+
+                throw error;
+            }
+        },
+        {
+            connection: getRedisConnection() as any,
+            concurrency: 10, // Meta allows higher concurrency, 10 is safe for starters
+            limiter: {
+                max: 50, // Max 50 jobs
+                duration: 1000 // per second
+            }
+        }
+    );
+
+    worker.on("completed", (job) => {
+        console.log(`WhatsApp Job ${job.id} completed successfully`);
+    });
+
+    worker.on("failed", (job, err) => {
+        console.error(`WhatsApp Job ${job?.id} failed with error:`, err);
+    });
+
+    return worker;
+};
+

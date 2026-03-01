@@ -16,6 +16,7 @@ export function AddContactModal({ isOpen, onClose, onSubmit }: AddContactModalPr
     const [lastName, setLastName] = useState("");
     const [company, setCompany] = useState("");
     const [phone, setPhone] = useState("");
+    const [whatsappNumber, setWhatsappNumber] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState("");
 
@@ -27,6 +28,7 @@ export function AddContactModal({ isOpen, onClose, onSubmit }: AddContactModalPr
         setLastName("");
         setCompany("");
         setPhone("");
+        setWhatsappNumber("");
         setError("");
         onClose();
     };
@@ -42,7 +44,14 @@ export function AddContactModal({ isOpen, onClose, onSubmit }: AddContactModalPr
 
         setIsSubmitting(true);
         try {
-            await onSubmit({ email: email.trim(), firstName: firstName.trim() || undefined, lastName: lastName.trim() || undefined, company: company.trim() || undefined, phone: phone.trim() || undefined });
+            await onSubmit({
+                email: email.trim(),
+                firstName: firstName.trim() || undefined,
+                lastName: lastName.trim() || undefined,
+                company: company.trim() || undefined,
+                phone: phone.trim() || undefined,
+                whatsappNumber: whatsappNumber.trim().replace(/[^0-9]/g, "") || undefined
+            });
             handleClose();
         } catch (err: unknown) {
             const e = err as Error;
@@ -112,15 +121,27 @@ export function AddContactModal({ isOpen, onClose, onSubmit }: AddContactModalPr
                         />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
-                        <input
-                            type="tel"
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            placeholder="+1 555 000 0000"
-                            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                        />
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
+                            <input
+                                type="tel"
+                                value={phone}
+                                onChange={(e) => setPhone(e.target.value)}
+                                placeholder="+1 555 000 0000"
+                                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1.5">WhatsApp Number</label>
+                            <input
+                                type="tel"
+                                value={whatsappNumber}
+                                onChange={(e) => setWhatsappNumber(e.target.value)}
+                                placeholder="15550000000"
+                                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                            />
+                        </div>
                     </div>
 
                     {error && (

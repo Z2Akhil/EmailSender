@@ -9,7 +9,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const CATEGORIES = [
     { label: "All Templates", value: "all" },
-    { label: "Official", value: "official" },
+    { label: "Email", value: "email" },
+    { label: "WhatsApp", value: "whatsapp" },
     { label: "My Templates", value: "custom" },
 ];
 
@@ -54,9 +55,22 @@ export default function TemplatesPage() {
         const matchesSearch = (t.name?.toLowerCase() || "").includes(search.toLowerCase()) ||
             (t.description?.toLowerCase() || "").includes(search.toLowerCase());
         const matchesCategory = category === "all" ||
-            (category === "official" && t.isGlobal) ||
+            (category === "email" && t.type !== "WHATSAPP") ||
+            (category === "whatsapp" && t.type === "WHATSAPP") ||
             (category === "custom" && !t.isGlobal);
         return matchesSearch && matchesCategory;
+    });
+
+    const syncWhatsappMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/whatsapp/templates", { method: "POST" });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || "Failed to sync templates");
+            return json;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["templates"] });
+        }
     });
 
     const handleSelect = (template: Template) => {
@@ -71,13 +85,23 @@ export default function TemplatesPage() {
                     <h1 className="text-2xl font-bold text-gray-900">Email Templates</h1>
                     <p className="text-gray-500 mt-1">Select a starting point for your next campaign</p>
                 </div>
-                <button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                    <Plus className="w-4 h-4" />
-                    Create Custom
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => syncWhatsappMutation.mutate()}
+                        disabled={syncWhatsappMutation.isPending}
+                        className="inline-flex items-center gap-2 bg-green-50 text-green-700 text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-green-100 transition-colors border border-green-200"
+                    >
+                        {syncWhatsappMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                        Sync WhatsApp
+                    </button>
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Create Custom
+                    </button>
+                </div>
             </div>
 
             {/* Toolbar */}

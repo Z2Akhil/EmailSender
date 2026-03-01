@@ -17,9 +17,10 @@ async function start() {
         console.log("Connected to MongoDB for Worker");
 
         // Dynamically import the worker logic so it registers after DB connects
-        import('./lib/worker').then(({ initWorker }) => {
-            console.log("Starting BulkMailer BullMQ Worker...");
+        import('./lib/worker').then(({ initWorker, initWhatsappWorker }) => {
+            console.log("Starting BulkMailer BullMQ Workers...");
             initWorker();
+            initWhatsappWorker();
         });
 
     } catch (error) {

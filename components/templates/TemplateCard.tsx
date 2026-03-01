@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Copy, Plus } from "lucide-react";
+import { Eye, Copy, Plus, MessageCircle, Mail } from "lucide-react";
 import { Template } from "@/types";
 
 interface TemplateCardProps {
@@ -30,7 +30,11 @@ export function TemplateCard({
                         />
                     ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
-                            <Eye className="w-5 h-5 text-gray-300" />
+                            {template.type === "WHATSAPP" ? (
+                                <MessageCircle className="w-5 h-5 text-green-500" />
+                            ) : (
+                                <Eye className="w-5 h-5 text-gray-300" />
+                            )}
                         </div>
                     )}
                 </div>
@@ -40,9 +44,9 @@ export function TemplateCard({
                         <h3 className="text-gray-900 font-semibold truncate" title={template.name}>
                             {template.name}
                         </h3>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${template.isGlobal ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${template.type === "WHATSAPP" ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"
                             }`}>
-                            {template.isGlobal ? "Official" : "Mine"}
+                            {template.type === "WHATSAPP" ? "WhatsApp" : "Email"}
                         </span>
                     </div>
                     {template.description && (
@@ -86,20 +90,29 @@ export function TemplateCard({
                         className="w-full h-full object-cover"
                     />
                 ) : (
-                    <div className="absolute inset-0 w-full h-full">
-                        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-0 opacity-20">
-                            <Eye className="w-12 h-12 text-gray-300" />
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mt-2">Preview Loading...</p>
-                        </div>
-                        {/* Iframe Preview */}
-                        <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none origin-top-left" style={{ transform: 'scale(0.5)', width: '200%', height: '200%' }}>
-                            <iframe
-                                src={`/api/templates/${template.id}/preview`}
-                                className="w-full h-full border-none"
-                                title={template.name}
-                                scrolling="no"
-                            />
-                        </div>
+                    <div className="absolute inset-0 w-full h-full bg-gray-50 flex items-center justify-center">
+                        {template.type === "WHATSAPP" ? (
+                            <div className="flex flex-col items-center text-center p-6 opacity-40">
+                                <MessageCircle className="w-16 h-16 text-green-500 mb-3" />
+                                <p className="text-xs font-medium text-green-600 uppercase tracking-wider">WhatsApp Template</p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-0 opacity-20">
+                                    <Eye className="w-12 h-12 text-gray-300" />
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mt-2">Preview Loading...</p>
+                                </div>
+                                {/* Iframe Preview */}
+                                <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none origin-top-left" style={{ transform: 'scale(0.5)', width: '200%', height: '200%' }}>
+                                    <iframe
+                                        src={`/api/templates/${template.id}/preview`}
+                                        className="w-full h-full border-none"
+                                        title={template.name}
+                                        scrolling="no"
+                                    />
+                                </div>
+                            </>
+                        )}
                         {/* Overlay to catch clicks and prevent iframe interaction */}
                         <div className="absolute inset-0 z-10" />
                     </div>
@@ -152,9 +165,10 @@ export function TemplateCard({
                 </div>
 
                 <div className="mt-auto pt-3 border-t border-gray-50 flex items-center justify-between">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${template.isGlobal ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${template.type === "WHATSAPP" ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"
                         }`}>
-                        {template.isGlobal ? "Official" : "My Template"}
+                        {template.type === "WHATSAPP" ? <MessageCircle className="w-3 h-3" /> : <Mail className="w-3 h-3" />}
+                        {template.type === "WHATSAPP" ? "WhatsApp" : "Email"}
                     </span>
 
                     <div className="flex items-center gap-2">

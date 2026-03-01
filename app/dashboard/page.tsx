@@ -11,7 +11,8 @@ import {
     Loader2,
     Clock,
     CheckCircle2,
-    AlertCircle
+    AlertCircle,
+    MessageCircle
 } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -22,8 +23,10 @@ interface DashboardStats {
     totalContacts: number;
     totalCampaigns: number;
     totalEmailsSent: number;
-    avgOpenRate: number;
-    avgClickRate: number;
+    totalWhatsappSent: number;
+    avgEmailOpenRate: number;
+    avgWhatsappOpenRate: number;
+    avgEmailClickRate: number;
     recentCampaigns: Campaign[];
 }
 
@@ -60,18 +63,18 @@ export default function DashboardPage() {
         {
             label: "Emails Sent",
             value: statsData?.totalEmailsSent.toLocaleString() || "0",
-            icon: TrendingUp,
-            color: "text-green-600",
-            bg: "bg-green-50",
-            trend: "Total deliveries"
+            icon: Mail,
+            color: "text-blue-600",
+            bg: "bg-blue-50",
+            trend: statsData ? `Avg Open: ${statsData.avgEmailOpenRate.toFixed(1)}%` : "Total deliveries"
         },
         {
-            label: "Avg Open Rate",
-            value: statsData ? `${statsData.avgOpenRate.toFixed(1)}%` : "—",
-            icon: BarChart3,
-            color: "text-orange-600",
-            bg: "bg-orange-50",
-            trend: "Engagement metrics"
+            label: "WhatsApp Sent",
+            value: statsData?.totalWhatsappSent.toLocaleString() || "0",
+            icon: MessageCircle,
+            color: "text-green-600",
+            bg: "bg-green-50",
+            trend: statsData ? `Avg Open: ${statsData.avgWhatsappOpenRate.toFixed(1)}%` : "Total deliveries"
         },
     ];
 

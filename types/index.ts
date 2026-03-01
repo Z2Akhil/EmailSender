@@ -15,6 +15,7 @@ export interface Contact {
     lastName?: string | null;
     company?: string | null;
     phone?: string | null;
+    whatsappNumber?: string | null;
     listId: string;
     status: ContactStatus;
     createdAt: Date;
@@ -69,6 +70,7 @@ export interface Campaign {
     scheduledAt?: Date | null;
     sentAt?: Date | null;
     workspaceId: string;
+    channel?: "EMAIL" | "WHATSAPP";
     provider?: "SES" | "SMTP";
     domainId?: string | null;
     templateId?: string | null;
@@ -90,10 +92,14 @@ export interface Template {
     id: string;
     name: string;
     description?: string | null;
-    htmlContent: string;
+    htmlContent?: string;
     thumbnail?: string | null;
     workspaceId?: string | null;
     isGlobal: boolean;
+    type?: "EMAIL" | "WHATSAPP";
+    whatsappTemplateName?: string | null;
+    whatsappTemplateLanguage?: string | null;
+    whatsappTemplateComponents?: any;
     createdAt: Date;
     updatedAt: Date;
 }
