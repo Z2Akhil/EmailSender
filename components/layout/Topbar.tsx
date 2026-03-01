@@ -1,15 +1,18 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { Bell, ChevronDown, LogOut, Settings, User } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Settings, User, Menu } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { getInitials } from "@/lib/utils";
+import { useSidebarStore } from "@/lib/store";
 
 export function Topbar() {
     const { data: session } = useSession();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+
+    const { toggle } = useSidebarStore();
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -26,14 +29,22 @@ export function Topbar() {
     const userImage = session?.user?.image;
 
     return (
-        <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-6 flex-shrink-0">
+        <header className="h-16 min-h-[4rem] bg-white border-b border-gray-100 flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
             <div className="flex items-center gap-2">
-                <h1 className="text-sm font-medium text-gray-500">
+                {/* Mobile Menu Toggle */}
+                <button
+                    onClick={toggle}
+                    className="md:hidden p-2 -ml-2 rounded-lg hover:bg-gray-100 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                    aria-label="Toggle Menu"
+                >
+                    <Menu className="w-5 h-5" />
+                </button>
+                <h1 className="text-sm font-medium text-gray-500 hidden sm:block ml-2">
                     {/* Page title injected by child pages */}
                 </h1>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
                 {/* Notifications */}
                 <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 transition-colors">
                     <Bell className="w-4 h-4 text-gray-500" />
