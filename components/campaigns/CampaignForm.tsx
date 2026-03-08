@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,9 +9,16 @@ import {
 } from "lucide-react";
 import { MessageCircle, Mail } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { Campaign, Template, ContactList, Domain, ApiResponse } from "@/types";
 import { TemplateCard } from "@/components/templates/TemplateCard";
+import type { EmailEditorWrapperRef } from "@/components/campaigns/EmailEditorWrapper";
+
+const EmailEditorWrapper = dynamic(
+    () => import("@/components/campaigns/EmailEditorWrapper").then(mod => mod.EmailEditorWrapper),
+    { ssr: false }
+);
 
 type Step = "SETTINGS" | "TEMPLATE" | "CONTENT" | "RECIPIENTS" | "REVIEW";
 
@@ -33,6 +40,9 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const [currentStep, setCurrentStep] = useState<Step>("SETTINGS");
+    const [testEmailModal, setTestEmailModal] = useState(false);
+    const [testEmailTo, setTestEmailTo] = useState("");
+    const [isSendingTest, setIsSendingTest] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -43,12 +53,15 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         replyTo: initialData?.replyTo || "",
         templateId: initialData?.templateId || "",
         htmlContent: initialData?.htmlContent || "",
+        emailDesign: initialData?.emailDesign || null,
         textContent: initialData?.textContent || "",
         recipientListId: initialData?.recipientListId || "",
         domainId: initialData?.domainId || "",
         provider: (initialData as any)?.provider || "SES",
         channel: initialData?.channel || "EMAIL",
     });
+
+    const emailEditorRef = useRef<EmailEditorWrapperRef>(null);
 
     const urlTemplateId = searchParams.get("templateId");
 
@@ -66,6 +79,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                 replyTo: initialData.replyTo || "",
                 templateId: initialData.templateId || "",
                 htmlContent: initialData.htmlContent || "",
+                emailDesign: initialData.emailDesign || null,
                 textContent: initialData.textContent || "",
                 recipientListId: initialData.recipientListId || "",
                 domainId: initialData.domainId || "",
@@ -99,7 +113,8 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                     setFormData(prev => ({
                         ...prev,
                         templateId: template.id || (template as any)._id,
-                        htmlContent: template.htmlContent,
+                        htmlContent: template.htmlContent || "",
+                        emailDesign: template.emailDesign || null,
                     }));
                 }
             } catch (err) {
@@ -177,7 +192,8 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
             setFormData({
                 ...formData,
                 templateId: fullTemplate.id,
-                htmlContent: fullTemplate.htmlContent,
+                htmlContent: fullTemplate.htmlContent || "",
+                emailDesign: fullTemplate.emailDesign || null,
                 textContent: "",
             });
             handleNext();
@@ -198,13 +214,33 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
 
     const mutation = useMutation({
         mutationFn: async () => {
+            let finalHtml = formData.htmlContent;
+            let finalDesign = formData.emailDesign;
+
+            // If we are on the content step and using email, export the latest design
+            if (formData.channel === "EMAIL" && emailEditorRef.current) {
+                const exported = await emailEditorRef.current.exportHtml();
+                if (exported.html && exported.design) {
+                    finalHtml = exported.html;
+                    finalDesign = exported.design;
+                    // Update local state too
+                    setFormData(prev => ({ ...prev, htmlContent: finalHtml, emailDesign: finalDesign }));
+                }
+            }
+
+            const payload = {
+                ...formData,
+                htmlContent: finalHtml,
+                emailDesign: finalDesign,
+            };
+
             const url = isEditing ? `/api/campaigns/${initialData?.id}` : "/api/campaigns";
             const method = isEditing ? "PATCH" : "POST";
 
             const res = await fetch(url, {
                 method,
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(formData),
+                body: JSON.stringify(payload),
             });
             if (!res.ok) {
                 const error = await res.json();
@@ -243,6 +279,14 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                     >
                         Cancel
                     </button>
+                    {currentStep === "REVIEW" && formData.channel === "EMAIL" && initialData?.id && (
+                        <button
+                            className="bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold px-4 py-2 rounded-xl hover:bg-amber-100 transition-colors"
+                            onClick={() => setTestEmailModal(true)}
+                        >
+                            Send Test Email
+                        </button>
+                    )}
                     <button
                         className="bg-white border border-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-xl hover:bg-gray-50 transition-colors"
                         onClick={() => mutation.mutate()}
@@ -644,32 +688,34 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                             <p className="text-gray-500 text-sm mt-1">Customize your email message</p>
                         </div>
 
-                        <div className="flex-1 border border-gray-100 rounded-2xl overflow-hidden flex flex-col">
-                            <div className="bg-gray-50 border-b border-gray-100 p-2 flex items-center gap-2">
-                                <div className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                    {formData.channel === "WHATSAPP" ? "Content (Read Only)" : "HTML Editor"}
-                                </div>
-                            </div>
-                            <textarea
-                                className="flex-1 w-full p-6 font-mono text-sm resize-none focus:outline-none bg-white"
-                                value={formData.htmlContent}
-                                onChange={e => formData.channel !== "WHATSAPP" && setFormData({ ...formData, htmlContent: e.target.value })}
-                                readOnly={formData.channel === "WHATSAPP"}
-                                placeholder={formData.channel === "WHATSAPP" ? "WhatsApp Templates are managed via Meta." : "Your email HTML content..."}
-                            />
+                        <div className="flex-1 border border-gray-100 rounded-2xl overflow-hidden flex flex-col bg-white">
+                            {formData.channel === "WHATSAPP" ? (
+                                <textarea
+                                    className="flex-1 w-full p-6 font-mono text-sm resize-none focus:outline-none bg-gray-50 text-gray-500"
+                                    value="WhatsApp templates are managed in the Meta Business Manager and synced here. Read-only view."
+                                    readOnly={true}
+                                />
+                            ) : (
+                                <EmailEditorWrapper 
+                                    ref={emailEditorRef} 
+                                    initialDesign={formData.emailDesign}
+                                />
+                            )}
                         </div>
 
-                        <div className="mt-4 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
-                            <div className="flex items-start gap-3">
-                                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                                    <FileText className="w-4 h-4" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-semibold text-blue-900">Pro Tip</p>
-                                    <p className="text-xs text-blue-700 mt-0.5">You can use double curly braces for personalization, like &#x7B;&#x7B;firstName&#x7D;&#x7D; or &#x7B;&#x7B;email&#x7D;&#x7D;.</p>
+                        {formData.channel === "EMAIL" && (
+                            <div className="mt-4 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
+                                <div className="flex items-start gap-3">
+                                    <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                                        <FileText className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-semibold text-blue-900">Pro Tip</p>
+                                        <p className="text-xs text-blue-700 mt-0.5">You can use double curly braces for personalization, like &#x7B;&#x7B;firstName&#x7D;&#x7D; or &#x7B;&#x7B;email&#x7D;&#x7D;.</p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 )}
 
@@ -750,6 +796,57 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                     </div>
                 )}
             </div>
+
+            {/* Test Email Modal */}
+            {testEmailModal && (
+                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6">
+                        <h3 className="text-lg font-bold text-gray-900 mb-1">Send Test Email</h3>
+                        <p className="text-sm text-gray-500 mb-4">Send a preview of this campaign to an email address. Tracking links are disabled.</p>
+                        <input
+                            type="email"
+                            placeholder="you@example.com"
+                            value={testEmailTo}
+                            onChange={e => setTestEmailTo(e.target.value)}
+                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 mb-4"
+                        />
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => { setTestEmailModal(false); setTestEmailTo(""); }}
+                                className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                disabled={!testEmailTo || isSendingTest}
+                                onClick={async () => {
+                                    if (!initialData?.id) return;
+                                    setIsSendingTest(true);
+                                    try {
+                                        const res = await fetch(`/api/campaigns/${initialData.id}/test-email`, {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ to: testEmailTo }),
+                                        });
+                                        const data = await res.json();
+                                        if (!res.ok) throw new Error(data.error);
+                                        alert(`✅ Test email sent to ${testEmailTo}`);
+                                        setTestEmailModal(false);
+                                        setTestEmailTo("");
+                                    } catch (err: any) {
+                                        alert(`❌ Failed: ${err.message}`);
+                                    } finally {
+                                        setIsSendingTest(false);
+                                    }
+                                }}
+                                className="bg-blue-600 text-white text-sm font-semibold px-6 py-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all"
+                            >
+                                {isSendingTest ? "Sending..." : "Send Test"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Footer Navigation */}
             <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-white/80 backdrop-blur-md border-t border-gray-100 py-4 px-8 flex items-center justify-between z-40">

@@ -6,6 +6,7 @@ export interface ITemplate extends Document {
     description?: string;
     type: "EMAIL" | "WHATSAPP";
     htmlContent?: string;
+    emailDesign?: any;
     textContent?: string;
     thumbnail?: string;
     workspaceId?: mongoose.Types.ObjectId;
@@ -23,6 +24,7 @@ const TemplateSchema = new Schema<ITemplate>(
         description: { type: String, trim: true },
         type: { type: String, enum: ["EMAIL", "WHATSAPP"], default: "EMAIL" },
         htmlContent: { type: String }, // Optional for WhatsApp
+        emailDesign: { type: Schema.Types.Mixed }, // Stores Unlayer JSON
         textContent: { type: String },
         thumbnail: { type: String },
         workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace" },

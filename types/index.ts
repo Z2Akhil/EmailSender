@@ -62,6 +62,7 @@ export interface Campaign {
     name: string;
     subject: string;
     htmlContent: string;
+    emailDesign?: any; // Stores Unlayer JSON
     textContent?: string | null;
     fromName: string;
     fromEmail: string;
@@ -93,6 +94,7 @@ export interface Template {
     name: string;
     description?: string | null;
     htmlContent?: string;
+    emailDesign?: any; // Stores Unlayer JSON
     thumbnail?: string | null;
     workspaceId?: string | null;
     isGlobal: boolean;

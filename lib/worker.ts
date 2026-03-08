@@ -219,8 +219,11 @@ export const initWhatsappWorker = () => {
 
                 // The messageId from Meta can be mapped here to the CampaignRecipient if we add a field for it
 
+                // Save the WAMID so the webhook can match delivery status updates
+                const wamid = result.messages?.[0]?.id;
                 await CampaignRecipient.findByIdAndUpdate(recipientStatus._id, {
                     status: "SENT", // Initially SENT until Webhook updates to DELIVERED/READ
+                    ...(wamid ? { messageId: wamid } : {}),
                     updatedAt: new Date()
                 });
 

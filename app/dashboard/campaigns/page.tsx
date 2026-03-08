@@ -46,32 +46,18 @@ export default function CampaignsPage() {
 
     const duplicateMutation = useMutation({
         mutationFn: async (id: string) => {
-            const res = await fetch(`/api/campaigns/${id}`);
-            if (!res.ok) throw new Error("Source campaign not found");
-            const { data: source } = await res.json();
-
-            const createRes = await fetch("/api/campaigns", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: `${source.name} (Copy)`,
-                    subject: source.subject,
-                    fromName: source.fromName,
-                    fromEmail: source.fromEmail,
-                    replyTo: source.replyTo,
-                    templateId: source.templateId,
-                    htmlContent: source.htmlContent,
-                    recipientListId: source.recipientListId,
-                    provider: source.provider,
-                    domainId: source.domainId,
-                }),
-            });
-            if (!createRes.ok) throw new Error("Failed to duplicate campaign");
-            return createRes.json();
+            const res = await fetch(`/api/campaigns/${id}/duplicate`, { method: "POST" });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Failed to duplicate campaign");
+            }
+            return res.json();
         },
-        onSuccess: () => {
+        onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+            alert(`Campaign duplicated as "${data.data?.name}"`);
         },
+        onError: (err: any) => alert(`Duplicate failed: ${err.message}`),
     });
 
     const campaigns = campaignsData?.data || [];

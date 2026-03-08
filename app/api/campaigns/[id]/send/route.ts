@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
 import { Contact } from "@/models/Contact";
-import { addEmailJob } from "@/lib/queue";
+import { addEmailJob, addWhatsappJob } from "@/lib/queue";
 import { checkPlanLimits } from "@/lib/stripe";
 import { strictRateLimit } from "@/lib/ratelimit";
 
@@ -45,15 +45,57 @@ export async function POST(
             return NextResponse.json({ success: false, error: "Recipient list not selected" }, { status: 400 });
         }
 
-        // 2. Fetch Recipients
+        const isWhatsapp = campaign.channel === "WHATSAPP";
+
+        // 2. Fetch Recipients (ACTIVE contacts only — suppresses UNSUBSCRIBED and BOUNCED)
         const contacts = await Contact.find({
             listId: campaign.recipientListId,
-            status: "ACTIVE", // Only send to active contacts
+            status: "ACTIVE",
         });
 
         if (contacts.length === 0) {
             return NextResponse.json({ success: false, error: "No active contacts in the selected list" }, { status: 400 });
         }
+
+        // For WhatsApp campaigns, ensure contacts have a WhatsApp number and have opted in
+        if (isWhatsapp) {
+            const whatsappContacts = contacts.filter(
+                (c) => c.whatsappNumber && c.whatsappOptIn
+            );
+
+            if (whatsappContacts.length === 0) {
+                return NextResponse.json({
+                    success: false,
+                    error: "No contacts in this list have a WhatsApp number with opt-in. Please ensure contacts have a whatsappNumber and whatsappOptIn=true.",
+                }, { status: 400 });
+            }
+
+            // Update Campaign Status
+            campaign.status = "SENDING";
+            campaign.totalRecipients = whatsappContacts.length;
+            campaign.sentAt = new Date();
+            await campaign.save();
+
+            // Dispatch WhatsApp jobs
+            const jobPromises = whatsappContacts.map((contact) =>
+                addWhatsappJob({
+                    campaignId: campaign._id.toString(),
+                    contactId: contact._id.toString(),
+                    recipientPhone: contact.whatsappNumber!,
+                    recipientName: contact.firstName,
+                })
+            );
+
+            await Promise.all(jobPromises);
+
+            return NextResponse.json({
+                success: true,
+                message: `Dispatched ${whatsappContacts.length} WhatsApp messages to queue`,
+                totalRecipients: whatsappContacts.length,
+            });
+        }
+
+        // --- Email Campaign ---
 
         // Check Plan Limits (Email Volume)
         const limitCheck = await checkPlanLimits(session.user.workspaceId, "emails");
@@ -71,7 +113,7 @@ export async function POST(
         campaign.sentAt = new Date();
         await campaign.save();
 
-        // 4. Dispatch Jobs
+        // 4. Dispatch Email Jobs
         const jobPromises = contacts.map((contact) =>
             addEmailJob({
                 campaignId: campaign._id.toString(),

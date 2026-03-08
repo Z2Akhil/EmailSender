@@ -18,6 +18,7 @@ const campaignSchema = z.object({
     templateId: z.string().optional(),
     domainId: z.string().optional().or(z.literal("")),
     htmlContent: z.string().optional(),
+    emailDesign: z.any().optional(),
     recipientListId: z.string().min(1, "Recipient list is required"),
 }).superRefine((data, ctx) => {
     if (data.channel === "EMAIL") {

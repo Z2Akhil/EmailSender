@@ -5,6 +5,7 @@ export interface ICampaign extends Document {
     name: string;
     subject: string;
     htmlContent: string;
+    emailDesign?: any;
     textContent?: string;
     fromName: string;
     fromEmail: string;
@@ -48,6 +49,7 @@ const CampaignSchema = new Schema<ICampaign>(
         name: { type: String, required: true, trim: true },
         subject: { type: String, trim: true }, // Optional for WhatsApp
         htmlContent: { type: String }, // Optional for WhatsApp
+        emailDesign: { type: Schema.Types.Mixed }, // Stores Unlayer JSON
         textContent: { type: String },
         fromName: { type: String, required: true, trim: true },
         fromEmail: { type: String, required: true, lowercase: true, trim: true },

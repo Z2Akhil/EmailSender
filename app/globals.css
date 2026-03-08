@@ -167,4 +167,4 @@ html {
   body {
     @apply bg-background text-foreground;
   }
-}
+}@import 'grapesjs/dist/css/grapes.min.css';

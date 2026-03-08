@@ -15,6 +15,7 @@ const campaignUpdateSchema = z.object({
     provider: z.enum(["SES", "SMTP"]).optional(),
     templateId: z.string().optional(),
     htmlContent: z.string().optional(),
+    emailDesign: z.any().optional(),
     recipientListId: z.string().optional(),
     domainId: z.string().optional().or(z.literal("")),
     status: z.enum(["DRAFT", "SCHEDULED", "SENDING", "SENT", "ARCHIVED"]).optional(),
