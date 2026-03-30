@@ -5,7 +5,12 @@ import { Workspace } from "@/models/Workspace";
 import { redirect } from "next/navigation";
 import WhatsappSettingsForm from "./WhatsappSettingsForm";
 
-export default async function WhatsappSettingsPage() {
+export default async function WhatsappSettingsPage({
+    searchParams: searchParamsPromise
+}: {
+    searchParams: Promise<{ success?: string; error?: string; step?: string }>
+}) {
+    const searchParams = await searchParamsPromise;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
         redirect("/login");
@@ -31,6 +36,9 @@ export default async function WhatsappSettingsPage() {
                         initialPhoneNumberId={workspace.whatsappPhoneNumberId || ""}
                         initialBusinessAccountId={workspace.whatsappBusinessAccountId || ""}
                         isConfigured={!!workspace.whatsappAccessToken}
+                        oauthSuccess={searchParams.success === "true"}
+                        oauthError={searchParams.error}
+                        initialStep={searchParams.step}
                     />
                 </div>
             </div>

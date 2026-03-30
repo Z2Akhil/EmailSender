@@ -2,6 +2,7 @@ import { Worker, Job } from "bullmq";
 import { getRedisConnection } from "./redis";
 import { connectDB } from "./db";
 import { Campaign, CampaignRecipient } from "@/models/Campaign";
+import { Contact } from "@/models/Contact";
 import Domain from "@/models/Domain";
 import { Workspace } from "@/models/Workspace";
 import { Template } from "@/models/Template";
@@ -195,8 +196,36 @@ export const initWhatsappWorker = () => {
                     throw new Error(`Valid WhatsApp template not found for Campaign ${campaignId}`);
                 }
 
+                const contact = await Contact.findById(contactId);
+                if (!contact) {
+                    throw new Error(`Contact ${contactId} not found`);
+                }
+
+                if (!contact.whatsappOptIn) {
+                    await CampaignRecipient.findOneAndUpdate(
+                        { campaignId, contactId },
+                        {
+                            email: recipientPhone,
+                            status: "FAILED", // Marked as failed due to compliance
+                            updatedAt: new Date()
+                        },
+                        { upsert: true }
+                    );
+
+                    const updatedCampaign = await Campaign.findByIdAndUpdate(campaignId, {
+                        $inc: { failedCount: 1 }
+                    }, { new: true });
+
+                    if (updatedCampaign && (updatedCampaign.sentCount + updatedCampaign.failedCount >= updatedCampaign.totalRecipients)) {
+                        await Campaign.findByIdAndUpdate(campaignId, { status: "SENT" });
+                    }
+
+                    return { skipped: true, reason: "Contact has not opted-in to receive WhatsApp messages" };
+                }
+
                 // Wait / Rate Limit Logic (BullMQ concurrency also helps)
                 // Just use the API since it handles some bursts, Meta recommends ~80 msg/sec minimum tier
+                // BullMQ Rate limiter below (10 jobs / second) ensures we stay well within Meta's limits.
 
                 const recipientStatus = await CampaignRecipient.findOneAndUpdate(
                     { campaignId, contactId },
