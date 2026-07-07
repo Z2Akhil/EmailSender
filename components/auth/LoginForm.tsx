@@ -32,7 +32,13 @@ export function LoginForm() {
         });
 
         if (result?.error) {
-            setServerError("Invalid email or password. Please try again.");
+            // NextAuth passes the message thrown by authorize() through as-is;
+            // "CredentialsSignin" is its opaque fallback code
+            setServerError(
+                result.error === "CredentialsSignin"
+                    ? "Invalid email or password. Please try again."
+                    : result.error
+            );
         } else {
             router.push("/dashboard");
             router.refresh();

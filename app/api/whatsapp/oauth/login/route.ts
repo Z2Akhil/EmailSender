@@ -24,6 +24,9 @@ export async function GET(req: Request) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || `${protocol}://${host}`;
     const redirectUri = `${appUrl}/api/whatsapp/oauth/callback`;
     
+    // Only WhatsApp scopes: business_management is not available to this app
+    // type ("Invalid Scopes" from Meta). The callback discovers granted WABAs
+    // via debug_token granular scopes instead of /me/businesses.
     const scopes = "whatsapp_business_management,whatsapp_business_messaging";
     const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}&response_type=code`;
 

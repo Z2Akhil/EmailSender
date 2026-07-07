@@ -34,17 +34,24 @@ export async function POST(req: NextRequest) {
         // Create user (password hashed by pre-save hook)
         const user = await User.create({ name, email, password, providers: ["credentials"] });
 
-        // Create default workspace
-        const workspace = await Workspace.create({
-            name: `${name}'s Workspace`,
-            ownerId: user._id,
-        });
+        // Create default workspace. If this fails, roll back the user so we
+        // never leave a half-registered account (login would succeed but every
+        // API call would 401 for lack of a workspaceId).
+        try {
+            const workspace = await Workspace.create({
+                name: `${name}'s Workspace`,
+                ownerId: user._id,
+            });
 
-        await WorkspaceMember.create({
-            userId: user._id,
-            workspaceId: workspace._id,
-            role: "OWNER",
-        });
+            await WorkspaceMember.create({
+                userId: user._id,
+                workspaceId: workspace._id,
+                role: "OWNER",
+            });
+        } catch (workspaceError) {
+            await User.findByIdAndDelete(user._id).catch(() => { });
+            throw workspaceError;
+        }
 
         return NextResponse.json(
             {
@@ -54,7 +61,15 @@ export async function POST(req: NextRequest) {
             },
             { status: 201 }
         );
-    } catch (error) {
+    } catch (error: any) {
+        // Duplicate email race (unique index) — two signups at once
+        if (error?.code === 11000) {
+            return NextResponse.json(
+                { error: "An account with this email already exists" },
+                { status: 409 }
+            );
+        }
+
         console.error("[REGISTER_ERROR]", error);
         return NextResponse.json(
             { error: "Something went wrong. Please try again." },

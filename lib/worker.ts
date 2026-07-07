@@ -7,8 +7,8 @@ import Domain from "@/models/Domain";
 import { Workspace } from "@/models/Workspace";
 import { Template } from "@/models/Template";
 import { sendEmail, injectComplianceFooter } from "./email-service";
-import { sendWhatsappMessage } from "./whatsapp-service";
-import { decrypt } from "./crypto";
+import { sendWhatsappMessage, buildTemplateComponents } from "./whatsapp-service";
+import { decrypt, signTrackingUrl } from "./crypto";
 import mongoose from "mongoose";
 
 export const initWorker = () => {
@@ -72,7 +72,8 @@ export const initWorker = () => {
                         return match;
                     }
 
-                    const trackedUrl = `${clickTrackingBaseUrl}?r=${recipientId}&u=${encodeURIComponent(url)}`;
+                    const signature = signTrackingUrl(recipientId, url);
+                    const trackedUrl = `${clickTrackingBaseUrl}?r=${recipientId}&u=${encodeURIComponent(url)}&s=${signature}`;
                     return match.replace(url, trackedUrl);
                 });
 
@@ -130,22 +131,28 @@ export const initWorker = () => {
             } catch (error: any) {
                 console.error(`Failed to process email job ${job.id}:`, error);
 
-                // Update recipient status to failed
-                await CampaignRecipient.findOneAndUpdate(
-                    { campaignId, contactId },
-                    {
-                        status: "FAILED",
-                        updatedAt: new Date()
-                    },
-                    { upsert: true }
-                );
+                // Only count the failure once, on the FINAL retry attempt —
+                // otherwise each retry inflates failedCount and completes the
+                // campaign early
+                const isFinalAttempt = job.attemptsMade + 1 >= (job.opts.attempts || 1);
+                if (isFinalAttempt) {
+                    await CampaignRecipient.findOneAndUpdate(
+                        { campaignId, contactId },
+                        {
+                            status: "FAILED",
+                            errorMessage: String(error?.message || error).slice(0, 500),
+                            updatedAt: new Date()
+                        },
+                        { upsert: true }
+                    );
 
-                const updatedCampaign = await Campaign.findByIdAndUpdate(campaignId, {
-                    $inc: { failedCount: 1 }
-                }, { new: true });
+                    const updatedCampaign = await Campaign.findByIdAndUpdate(campaignId, {
+                        $inc: { failedCount: 1 }
+                    }, { new: true });
 
-                if (updatedCampaign && (updatedCampaign.sentCount + updatedCampaign.failedCount >= updatedCampaign.totalRecipients)) {
-                    await Campaign.findByIdAndUpdate(campaignId, { status: "SENT" });
+                    if (updatedCampaign && (updatedCampaign.sentCount + updatedCampaign.failedCount >= updatedCampaign.totalRecipients)) {
+                        await Campaign.findByIdAndUpdate(campaignId, { status: "SENT" });
+                    }
                 }
 
                 throw error; // Let BullMQ handle retry
@@ -241,7 +248,11 @@ export const initWhatsappWorker = () => {
                     to: recipientPhone,
                     templateName: template.whatsappTemplateName || "",
                     languageCode: template.whatsappTemplateLanguage || "en_US",
-                    components: template.whatsappTemplateComponents,
+                    // The stored components are the template DEFINITION; the send
+                    // API needs parameter values built from them per recipient
+                    components: buildTemplateComponents(template.whatsappTemplateComponents, {
+                        name: recipientName || contact.firstName || "there",
+                    }),
                     accessToken: workspace.whatsappAccessToken,
                     phoneNumberId: workspace.whatsappPhoneNumberId
                 });
@@ -269,10 +280,15 @@ export const initWhatsappWorker = () => {
             } catch (error: any) {
                 console.error(`Failed to process whatsapp job ${job.id}:`, error);
 
+                // Only count the failure once, on the FINAL retry attempt
+                const isFinalAttempt = job.attemptsMade + 1 >= (job.opts.attempts || 1);
+                if (!isFinalAttempt) throw error;
+
                 await CampaignRecipient.findOneAndUpdate(
                     { campaignId, contactId },
                     {
                         status: "FAILED",
+                        errorMessage: String(error?.message || error).slice(0, 500),
                         updatedAt: new Date()
                     },
                     { upsert: true }

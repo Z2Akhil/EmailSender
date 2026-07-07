@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
 import { Contact } from "@/models/Contact";
+import { Workspace } from "@/models/Workspace";
+import { Template } from "@/models/Template";
 import { addEmailJob, addWhatsappJob } from "@/lib/queue";
 import { checkPlanLimits } from "@/lib/stripe";
 import { strictRateLimit } from "@/lib/ratelimit";
@@ -59,6 +61,31 @@ export async function POST(
 
         // For WhatsApp campaigns, ensure contacts have a WhatsApp number and have opted in
         if (isWhatsapp) {
+            // Fail fast on configuration problems instead of enqueueing jobs
+            // that will all fail inside the worker
+            const workspace = await Workspace.findById(session.user.workspaceId);
+            if (!workspace?.whatsappAccessToken || !workspace?.whatsappPhoneNumberId) {
+                return NextResponse.json({
+                    success: false,
+                    error: "WhatsApp is not connected. Configure it in Settings → WhatsApp first.",
+                }, { status: 400 });
+            }
+
+            if (!campaign.templateId) {
+                return NextResponse.json({
+                    success: false,
+                    error: "This campaign has no WhatsApp template selected.",
+                }, { status: 400 });
+            }
+
+            const template = await Template.findById(campaign.templateId);
+            if (!template || template.type !== "WHATSAPP" || !template.whatsappTemplateName) {
+                return NextResponse.json({
+                    success: false,
+                    error: "The selected template is not a valid WhatsApp template. Re-sync templates and pick one.",
+                }, { status: 400 });
+            }
+
             const whatsappContacts = contacts.filter(
                 (c) => c.whatsappNumber && c.whatsappOptIn
             );

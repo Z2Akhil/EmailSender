@@ -11,6 +11,9 @@ const redis = hasCredentials
     ? new Redis({
         url: process.env.UPSTASH_REDIS_REST_URL!,
         token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+        // No retries: this runs in middleware on every request — a dead or
+        // unreachable instance must fail fast, not after 5 backoff attempts.
+        retry: false,
     })
     : null;
 
@@ -22,20 +25,52 @@ const mockLimit = async () => ({
     remaining: 0,
 });
 
+// Rate limiting is best-effort: if Upstash is unreachable (dead instance,
+// network issue), allow the request instead of taking down every API route —
+// this runs in middleware, so an unhandled error here 500s the whole app.
+// After a failure the limiter is skipped entirely for a cooldown window so
+// requests don't each pay the connection-failure latency.
+const CIRCUIT_OPEN_MS = 60_000;
+let circuitOpenUntil = 0;
+
+const failOpen = (limiter: Ratelimit): Ratelimit => {
+    return {
+        limit: async (key: string) => {
+            if (Date.now() < circuitOpenUntil) {
+                return mockLimit();
+            }
+            try {
+                return await limiter.limit(key);
+            } catch (error) {
+                circuitOpenUntil = Date.now() + CIRCUIT_OPEN_MS;
+                console.error(
+                    `Rate limiter unavailable — allowing requests without limits for ${CIRCUIT_OPEN_MS / 1000}s:`,
+                    error instanceof Error ? error.message : error
+                );
+                return mockLimit();
+            }
+        },
+    } as unknown as Ratelimit;
+};
+
 export const globalRateLimit = redis
-    ? new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(50, "10 s"),
-        analytics: true,
-        prefix: "@upstash/ratelimit/global",
-    })
-    : { limit: mockLimit } as unknown as Ratelimit;
+    ? failOpen(
+        new Ratelimit({
+            redis,
+            limiter: Ratelimit.slidingWindow(50, "10 s"),
+            analytics: true,
+            prefix: "@upstash/ratelimit/global",
+        })
+    )
+    : ({ limit: mockLimit } as unknown as Ratelimit);
 
 export const strictRateLimit = redis
-    ? new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(5, "60 s"),
-        analytics: true,
-        prefix: "@upstash/ratelimit/strict",
-    })
-    : { limit: mockLimit } as unknown as Ratelimit;
+    ? failOpen(
+        new Ratelimit({
+            redis,
+            limiter: Ratelimit.slidingWindow(5, "60 s"),
+            analytics: true,
+            prefix: "@upstash/ratelimit/strict",
+        })
+    )
+    : ({ limit: mockLimit } as unknown as Ratelimit);

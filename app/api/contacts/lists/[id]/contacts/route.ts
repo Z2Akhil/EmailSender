@@ -146,13 +146,18 @@ export async function POST(
             }, { status: 403 });
         }
 
+        const sanitizedWhatsapp = whatsappNumber?.replace(/[^0-9]/g, "") || undefined;
+
         const contact = await Contact.create({
             email: email.trim().toLowerCase(),
             firstName: firstName?.trim() || undefined,
             lastName: lastName?.trim() || undefined,
             company: company?.trim() || undefined,
             phone: phone?.trim() || undefined,
-            whatsappNumber: whatsappNumber?.replace(/[^0-9]/g, "") || undefined, // Sanitize to numeric
+            whatsappNumber: sanitizedWhatsapp,
+            // Providing a WhatsApp number implies the list owner asserts the
+            // contact consented — without this flag every send skips them
+            whatsappOptIn: !!sanitizedWhatsapp,
             listId: id,
             workspaceId: session.user.workspaceId,
             status: "ACTIVE",

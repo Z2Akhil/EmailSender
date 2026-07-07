@@ -12,6 +12,30 @@ const schema = z.object({
     whatsappBusinessAccountId: z.string().min(1, "Business Account ID is required"),
 });
 
+// Lightweight status check used by the campaign form to warn early
+// when a WhatsApp campaign is being built without a connected account
+export async function GET() {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session?.user?.workspaceId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        await connectDB();
+        const workspace = await Workspace.findById(session.user.workspaceId)
+            .select("whatsappAccessToken whatsappPhoneNumberId whatsappBusinessAccountId");
+
+        return NextResponse.json({
+            configured: !!(workspace?.whatsappAccessToken && workspace?.whatsappPhoneNumberId),
+            phoneNumberId: workspace?.whatsappPhoneNumberId || null,
+            businessAccountId: workspace?.whatsappBusinessAccountId || null,
+        });
+    } catch (error) {
+        console.error("WhatsApp status error:", error);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
+}
+
 export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions);

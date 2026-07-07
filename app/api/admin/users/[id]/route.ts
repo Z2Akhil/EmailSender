@@ -1,32 +1,43 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { User } from "@/models/User";
+import { Workspace } from "@/models/Workspace";
+import { requireAdmin } from "@/lib/admin-auth";
+
+const VALID_PLANS = ["FREE", "STARTER", "PRO"] as const;
 
 export async function PATCH(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     try {
         await connectDB();
         const body = await request.json();
         const { action, plan } = body;
         const resolvedParams = await params;
 
-        const user: any = await User.findById(resolvedParams.id);
+        const user = await User.findById(resolvedParams.id);
         if (!user) {
             return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
 
         if (action === "suspend") {
-            // we could add an isActive flag to the user schema, but for now
-            // let's assume we toggle an isActive field if we have one.
-            // If the model doesn't have it, let's just send back a success but note it.
             user.isActive = false;
         } else if (action === "activate") {
             user.isActive = true;
         } else if (action === "change_plan" && plan) {
-            user.subscription = user.subscription || {};
-            user.subscription.plan = plan.toUpperCase();
+            const newPlan = String(plan).toUpperCase() as (typeof VALID_PLANS)[number];
+            if (!VALID_PLANS.includes(newPlan)) {
+                return NextResponse.json({ error: `Invalid plan: ${plan}` }, { status: 400 });
+            }
+            // Keep the mirror and the source of truth in sync
+            user.plan = newPlan;
+            await Workspace.updateMany({ ownerId: user._id }, { planTier: newPlan });
+        } else {
+            return NextResponse.json({ error: "Unknown action" }, { status: 400 });
         }
 
         await user.save();
@@ -45,6 +56,9 @@ export async function DELETE(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     try {
         await connectDB();
         const resolvedParams = await params;

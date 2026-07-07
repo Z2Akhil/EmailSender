@@ -48,3 +48,26 @@ export function decrypt(text: string): string {
 
     return decrypted;
 }
+
+/**
+ * HMAC signature for click-tracking URLs. Prevents the /api/track/click
+ * endpoint from being abused as an open redirect: only URLs signed by the
+ * worker at send time are redirected to.
+ */
+export function signTrackingUrl(recipientId: string, url: string): string {
+    return crypto
+        .createHmac("sha256", getSecretKey())
+        .update(`${recipientId}:${url}`)
+        .digest("hex");
+}
+
+export function verifyTrackingSignature(recipientId: string, url: string, signature: string): boolean {
+    const expected = Buffer.from(signTrackingUrl(recipientId, url), "hex");
+    let provided: Buffer;
+    try {
+        provided = Buffer.from(signature, "hex");
+    } catch {
+        return false;
+    }
+    return expected.length === provided.length && crypto.timingSafeEqual(expected, provided);
+}

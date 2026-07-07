@@ -2,21 +2,24 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { User } from "@/models/User";
 import { Campaign } from "@/models/Campaign";
+import { requireAdmin } from "@/lib/admin-auth";
 // Note: Revenue/Invoices should theoretically come from Stripe API, but for simplicity
 // we'll calculate based on DB subscriptions if tracked, or return placeholder/basic metrics first.
 
 export async function GET() {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     try {
         await connectDB();
 
         // 1. Total Users
         const totalUsers = await User.countDocuments();
 
-        // 2. Active Users (Users who have sent a campaign recently or logged in recently - using simple count for now)
-        // Assume users with a campaign are 'active'. A real app would check lastLogin.
-        const activeUsersCount = await User.countDocuments({ stripeCustomerId: { $exists: true } });
+        // 2. Active Users — accounts that are not suspended
+        const activeUsersCount = await User.countDocuments({ isActive: { $ne: false } });
 
-        // 3. Plan Distribution
+        // 3. Plan Distribution (User.plan mirrors Workspace.planTier)
         const freePlan = await User.countDocuments({ plan: "FREE" });
         const basicPlan = await User.countDocuments({ plan: "STARTER" });
         const proPlan = await User.countDocuments({ plan: "PRO" });
@@ -24,7 +27,7 @@ export async function GET() {
         // 4. Campaign Metrics
         const campaigns = await Campaign.find({}, "status sentCount failedCount");
 
-        let totalCampaigns = campaigns.length;
+        const totalCampaigns = campaigns.length;
         let emailsSent = 0;
         let emailsFailed = 0;
 

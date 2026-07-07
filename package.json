@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "sed -i 's/::btn/:not(.btn)/g' node_modules/grapesjs/dist/css/grapes.min.css || true",
     "worker": "npx tsx start-worker.ts"
   },
   "dependencies": {
@@ -32,6 +31,7 @@
     "@tiptap/extension-text-style": "^3.20.1",
     "@tiptap/extension-underline": "^3.20.1",
     "@tiptap/extension-youtube": "^3.20.1",
+    "@tiptap/react": "^3.27.3",
     "@tiptap/starter-kit": "^3.20.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/nodemailer": "^7.0.11",
@@ -44,9 +44,6 @@
     "csv-parse": "^6.1.0",
     "dotenv": "^17.3.1",
     "framer-motion": "^12.34.3",
-    "grapesjs": "^0.19.5",
-    "grapesjs-preset-newsletter": "^1.0.2",
-    "grapesjs-react": "^4.0.3",
     "ioredis": "^5.9.3",
     "jose": "^6.1.3",
     "lucide-react": "^0.574.0",
@@ -75,8 +72,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^10.0.2",
-    "eslint-config-next": "^0.2.4",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.1.6",
     "shadcn": "^3.8.5",
     "tailwindcss": "^4",
     "typescript": "^5"

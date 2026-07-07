@@ -63,8 +63,9 @@ export default function CampaignsPage() {
     const campaigns = campaignsData?.data || [];
 
     const filteredCampaigns = campaigns.filter(c => {
-        const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
-            c.subject.toLowerCase().includes(search.toLowerCase());
+        // subject is undefined on WhatsApp campaigns
+        const matchesSearch = (c.name?.toLowerCase() || "").includes(search.toLowerCase()) ||
+            (c.subject?.toLowerCase() || "").includes(search.toLowerCase());
         const matchesStatus = !statusFilter || c.status === statusFilter;
         return matchesSearch && matchesStatus;
     });

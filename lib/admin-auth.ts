@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
 const secretKey = process.env.ADMIN_JWT_SECRET;
 const key = new TextEncoder().encode(secretKey);
@@ -59,4 +60,25 @@ export async function setAdminCookie(token: string) {
 export async function clearAdminCookie() {
     const cookieStore = await cookies();
     cookieStore.delete("admin_token");
+}
+
+/**
+ * Route-level admin guard for /api/admin/* handlers.
+ * Returns null when the request carries a valid admin token,
+ * otherwise a 401 response the handler should return immediately.
+ */
+export async function requireAdmin(): Promise<NextResponse | null> {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("admin_token")?.value;
+
+    if (!token) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = await verifyAdminToken(token);
+    if (!payload || payload.role !== "admin") {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    return null;
 }

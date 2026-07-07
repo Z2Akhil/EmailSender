@@ -5,10 +5,9 @@ export const loginSchema = z.object({
         .string()
         .min(1, "Email is required")
         .email("Please enter a valid email address"),
-    password: z
-        .string()
-        .min(1, "Password is required")
-        .min(6, "Password must be at least 6 characters"),
+    // Only require presence at login — composition rules belong to signup;
+    // enforcing them here would lock out valid existing passwords
+    password: z.string().min(1, "Password is required"),
 });
 
 export const registerSchema = z

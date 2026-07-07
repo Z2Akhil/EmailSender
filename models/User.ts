@@ -8,9 +8,13 @@ export interface IUser extends Document {
     password?: string;
     image?: string;
     emailVerified?: Date;
-    plan: "FREE" | "STARTER" | "GROWTH" | "PRO";
+    // Mirror of the owner workspace's planTier (source of truth for
+    // entitlements is Workspace.planTier — synced by the Stripe webhook
+    // and the admin change_plan action)
+    plan: "FREE" | "STARTER" | "PRO";
     providers: ("credentials" | "google")[];
     isProfileComplete: boolean;
+    isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -25,7 +29,7 @@ const UserSchema = new Schema<IUser>(
         emailVerified: { type: Date },
         plan: {
             type: String,
-            enum: ["FREE", "STARTER", "GROWTH", "PRO"],
+            enum: ["FREE", "STARTER", "PRO"],
             default: "FREE",
         },
         providers: {
@@ -36,6 +40,10 @@ const UserSchema = new Schema<IUser>(
         isProfileComplete: {
             type: Boolean,
             default: false,
+        },
+        isActive: {
+            type: Boolean,
+            default: true,
         }
     },
     {

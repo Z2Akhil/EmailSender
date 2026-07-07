@@ -13,10 +13,10 @@ import { addEmailJob, addWhatsappJob } from "@/lib/queue";
  * Authorization: Bearer <CRON_SECRET>
  */
 export async function GET(req: NextRequest) {
-    // Protect the cron endpoint
+    // Protect the cron endpoint — fail closed if CRON_SECRET is not configured
     const authHeader = req.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

@@ -37,18 +37,24 @@ export const authOptions: NextAuthOptions = {
                 // Explicitly select password field (excluded by default)
                 const user = await User.findOne({ email: credentials.email }).select("+password");
 
+                // Same message for "no user" and "wrong password" — don't
+                // reveal which emails have accounts
                 if (!user) {
-                    throw new Error("No account found with this email");
+                    throw new Error("Invalid email or password");
                 }
 
                 if (!user.password) {
-                    throw new Error("Please sign in with Google");
+                    throw new Error("This account uses Google sign-in. Please continue with Google.");
                 }
 
                 const isPasswordValid = await user.comparePassword(credentials.password);
 
                 if (!isPasswordValid) {
-                    throw new Error("Invalid password");
+                    throw new Error("Invalid email or password");
+                }
+
+                if (user.isActive === false) {
+                    throw new Error("This account has been suspended");
                 }
 
                 return {
@@ -95,6 +101,11 @@ export const authOptions: NextAuthOptions = {
                     });
 
                 } else {
+                    // Block suspended accounts from signing in via Google
+                    if (existingUser.isActive === false) {
+                        return false;
+                    }
+
                     // LINK ACCOUNT: If user exists but hasn't logged in with Google before
                     if (!existingUser.providers.includes("google")) {
                         existingUser.providers.push("google");
@@ -150,6 +161,33 @@ export const authOptions: NextAuthOptions = {
                 const member = await WorkspaceMember.findOne({ userId: token.id });
                 if (member) {
                     token.workspaceId = member.workspaceId.toString();
+                } else {
+                    // Self-heal: user exists without a workspace (interrupted
+                    // registration or legacy account). Without this the session
+                    // has no workspaceId and every API call returns 401.
+                    const dbUser = await User.findById(token.id);
+                    if (dbUser) {
+                        const workspace = await Workspace.create({
+                            name: `${dbUser.name}'s Workspace`,
+                            ownerId: dbUser._id,
+                        });
+                        await WorkspaceMember.create({
+                            userId: dbUser._id,
+                            workspaceId: workspace._id,
+                            role: "OWNER",
+                        });
+                        token.workspaceId = workspace._id.toString();
+                    }
+                }
+            }
+
+            // Refresh plan from the workspace (source of truth) at sign-in and
+            // on session updates — Stripe upgrades otherwise never reach the JWT.
+            if (token.workspaceId && (user || trigger === "update")) {
+                await connectDB();
+                const workspace = await Workspace.findById(token.workspaceId);
+                if (workspace?.planTier) {
+                    token.plan = workspace.planTier;
                 }
             }
 

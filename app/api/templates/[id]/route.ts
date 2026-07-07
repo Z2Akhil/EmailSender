@@ -36,3 +36,35 @@ export async function GET(
         return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
     }
 }
+
+export async function DELETE(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session?.user?.workspaceId) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { id } = await params;
+
+        await connectDB();
+
+        // Only workspace-owned templates can be deleted — never global ones
+        const template = await Template.findOneAndDelete({
+            _id: id,
+            workspaceId: session.user.workspaceId,
+            isGlobal: false,
+        });
+
+        if (!template) {
+            return NextResponse.json({ success: false, error: "Template not found or cannot be deleted" }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, message: "Template deleted" });
+    } catch (error) {
+        console.error("[TEMPLATE_DELETE]", error);
+        return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+    }
+}

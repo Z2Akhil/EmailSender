@@ -1,12 +1,13 @@
 "use client";
 
-import { Eye, Copy, Plus, MessageCircle, Mail } from "lucide-react";
+import { Eye, Plus, MessageCircle, Mail, Trash2 } from "lucide-react";
 import { Template } from "@/types";
 
 interface TemplateCardProps {
     template: Template;
     onSelect?: (template: Template) => void;
     onPreview?: (template: Template) => void;
+    onDelete?: (template: Template) => void;
     showActions?: boolean;
     layout?: "grid" | "list";
 }
@@ -15,6 +16,7 @@ export function TemplateCard({
     template,
     onSelect,
     onPreview,
+    onDelete,
     showActions = true,
     layout = "grid"
 }: TemplateCardProps) {
@@ -64,6 +66,15 @@ export function TemplateCard({
                             title="Preview"
                         >
                             <Eye className="w-5 h-5" />
+                        </button>
+                    )}
+                    {onDelete && !template.isGlobal && (
+                        <button
+                            onClick={() => onDelete(template)}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                            title="Delete template"
+                        >
+                            <Trash2 className="w-5 h-5" />
                         </button>
                     )}
                     {onSelect && (
@@ -179,6 +190,15 @@ export function TemplateCard({
                                 title="Open Preview"
                             >
                                 <Eye className="w-4 h-4" />
+                            </button>
+                        )}
+                        {onDelete && !template.isGlobal && (
+                            <button
+                                onClick={() => onDelete(template)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                title="Delete template"
+                            >
+                                <Trash2 className="w-4 h-4" />
                             </button>
                         )}
                         <button

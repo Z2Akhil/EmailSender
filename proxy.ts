@@ -25,7 +25,21 @@ export default withAuth(
             }
         }
 
-        // 2. Admin Route Protection
+        // 2a. Admin API Protection (401 JSON — no redirect for API calls)
+        if (
+            url.startsWith("/api/admin") &&
+            !url.startsWith("/api/admin/auth") &&
+            !url.startsWith("/api/admin/logout")
+        ) {
+            const adminToken = req.cookies.get("admin_token")?.value;
+            const payload = adminToken ? await verifyAdminToken(adminToken) : null;
+
+            if (!payload || payload.role !== "admin") {
+                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            }
+        }
+
+        // 2b. Admin Route Protection
         if (url.startsWith("/admin") && !url.startsWith("/admin/login")) {
             const adminToken = req.cookies.get("admin_token")?.value;
 

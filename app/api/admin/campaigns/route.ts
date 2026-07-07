@@ -3,8 +3,12 @@ import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
 // Populate user to get user details
 import { User } from "@/models/User";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export async function GET(request: Request) {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     try {
         await connectDB();
         const url = new URL(request.url);

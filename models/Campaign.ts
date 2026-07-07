@@ -40,6 +40,7 @@ export interface ICampaignRecipient extends Document {
     openedAt?: Date;
     clickedAt?: Date;
     bouncedAt?: Date;
+    errorMessage?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -51,8 +52,18 @@ const CampaignSchema = new Schema<ICampaign>(
         htmlContent: { type: String }, // Optional for WhatsApp
         emailDesign: { type: Schema.Types.Mixed }, // Stores Unlayer JSON
         textContent: { type: String },
-        fromName: { type: String, required: true, trim: true },
-        fromEmail: { type: String, required: true, lowercase: true, trim: true },
+        // Sender identity only applies to email campaigns
+        fromName: {
+            type: String,
+            trim: true,
+            required: function (this: ICampaign) { return this.channel === "EMAIL"; },
+        },
+        fromEmail: {
+            type: String,
+            lowercase: true,
+            trim: true,
+            required: function (this: ICampaign) { return this.channel === "EMAIL"; },
+        },
         replyTo: { type: String, lowercase: true, trim: true },
         status: {
             type: String,
@@ -101,6 +112,7 @@ const CampaignRecipientSchema = new Schema<ICampaignRecipient>(
         openedAt: { type: Date },
         clickedAt: { type: Date },
         bouncedAt: { type: Date },
+        errorMessage: { type: String },
     },
     {
         timestamps: true,

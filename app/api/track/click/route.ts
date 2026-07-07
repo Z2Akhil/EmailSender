@@ -1,35 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import { Campaign, CampaignRecipient } from "@/models/Campaign";
+import { verifyTrackingSignature } from "@/lib/crypto";
 
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const recipientId = searchParams.get("r");
         const targetUrl = searchParams.get("u");
+        const signature = searchParams.get("s");
 
-        if (!targetUrl) {
+        if (!targetUrl || !recipientId || !signature) {
             return NextResponse.redirect(new URL("/", req.url));
         }
 
-        if (recipientId) {
-            await connectDB();
+        // Reject unsigned/tampered URLs — prevents use as an open redirect
+        if (!verifyTrackingSignature(recipientId, targetUrl, signature)) {
+            return NextResponse.redirect(new URL("/", req.url));
+        }
 
-            // 1. Find and update the recipient
-            const recipient = await CampaignRecipient.findById(recipientId);
+        await connectDB();
 
-            if (recipient && recipient.status !== "CLICKED") {
-                // 2. Update recipient status
-                recipient.status = "CLICKED";
-                if (!recipient.openedAt) recipient.openedAt = new Date(); // If they clicked, they must have opened
-                recipient.clickedAt = new Date();
-                await recipient.save();
+        // 1. Find and update the recipient
+        const recipient = await CampaignRecipient.findById(recipientId);
 
-                // 3. Increment campaign click count
-                await Campaign.findByIdAndUpdate(recipient.campaignId, {
-                    $inc: { clickCount: 1 }
-                });
-            }
+        if (recipient && recipient.status !== "CLICKED") {
+            // 2. Update recipient status
+            recipient.status = "CLICKED";
+            if (!recipient.openedAt) recipient.openedAt = new Date(); // If they clicked, they must have opened
+            recipient.clickedAt = new Date();
+            await recipient.save();
+
+            // 3. Increment campaign click count
+            await Campaign.findByIdAndUpdate(recipient.campaignId, {
+                $inc: { clickCount: 1 }
+            });
         }
 
         // 4. Redirect to the original URL

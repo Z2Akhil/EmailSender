@@ -1,6 +1,6 @@
 // ─── User & Auth Types ────────────────────────────────────────────────────────
 
-export type UserPlan = "FREE" | "STARTER" | "GROWTH" | "PRO";
+export type UserPlan = "FREE" | "STARTER" | "PRO";
 
 export type WorkspaceRole = "OWNER" | "ADMIN" | "MEMBER";
 

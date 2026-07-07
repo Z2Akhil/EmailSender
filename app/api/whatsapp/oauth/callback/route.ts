@@ -52,46 +52,78 @@ export async function GET(req: NextRequest) {
         
         const longLivedToken = longTokenData.access_token || shortLivedToken;
 
-        // 3. Get User's Businesses (Modify to fetch all and their names)
-        const businessesRes = await fetch(`https://graph.facebook.com/v19.0/me/businesses?fields=id,name`, {
-            headers: { Authorization: `Bearer ${longLivedToken}` }
-        });
-        const businessesData = await businessesRes.json();
+        // 3. Discover which WABAs this token was granted access to.
+        // The whatsapp_business_management scope records the selected WABA ids
+        // as granular scopes on the token — no business_management needed.
+        const appAccessToken = `${appId}|${appSecret}`;
+        const debugRes = await fetch(
+            `https://graph.facebook.com/v19.0/debug_token?input_token=${longLivedToken}&access_token=${appAccessToken}`
+        );
+        const debugData = await debugRes.json();
 
-        if (businessesData.error || !businessesData.data || businessesData.data.length === 0) {
-            return NextResponse.redirect(new URL("/dashboard/settings/whatsapp?error=no_business_found", req.url));
+        const granular = debugData?.data?.granular_scopes || [];
+        const wabaScope = granular.find((s: any) => s.scope === "whatsapp_business_management");
+        let wabaIds: string[] = wabaScope?.target_ids || [];
+
+        // Fallback: token granted for all WABAs (no target_ids) — try the
+        // businesses route in case this app does have business_management
+        if (wabaIds.length === 0) {
+            const businessesRes = await fetch(`https://graph.facebook.com/v19.0/me/businesses?fields=id,name`, {
+                headers: { Authorization: `Bearer ${longLivedToken}` }
+            });
+            const businessesData = await businessesRes.json();
+            if (businessesData.data?.length > 0) {
+                for (const business of businessesData.data) {
+                    const wabasRes = await fetch(
+                        `https://graph.facebook.com/v19.0/${business.id}/owned_whatsapp_business_accounts?fields=id`,
+                        { headers: { Authorization: `Bearer ${longLivedToken}` } }
+                    );
+                    const wabasData = await wabasRes.json();
+                    for (const w of wabasData.data || []) wabaIds.push(w.id);
+                }
+            }
         }
 
-        const businesses = businessesData.data.map((b: any) => ({ id: b.id, name: b.name || `Business ${b.id}` }));
+        if (wabaIds.length === 0) {
+            console.error("No WABAs granted. debug_token:", JSON.stringify(debugData?.data?.granular_scopes));
+            return NextResponse.redirect(new URL("/dashboard/settings/whatsapp?error=no_waba_found", req.url));
+        }
+
+        // 4 & 5. Fetch each WABA's name and phone numbers
+        const businesses: { id: string; name: string }[] = [];
         const wabas: any[] = [];
         const phoneNumbers: any[] = [];
 
-        // 4 & 5. Get WABA IDs and Phone Numbers for ALL businesses
-        for (const business of businesses) {
-            const wabasRes = await fetch(`https://graph.facebook.com/v19.0/${business.id}/owned_whatsapp_business_accounts?fields=id,name`, {
-                headers: { Authorization: `Bearer ${longLivedToken}` }
-            });
-            const wabasData = await wabasRes.json();
-            
-            if (wabasData.data && wabasData.data.length > 0) {
-                for (const waba of wabasData.data) {
-                    wabas.push({ id: waba.id, name: waba.name || `WABA ${waba.id}`, businessId: business.id });
+        for (const wabaId of wabaIds) {
+            const wabaRes = await fetch(
+                `https://graph.facebook.com/v19.0/${wabaId}?fields=id,name,owner_business_info`,
+                { headers: { Authorization: `Bearer ${longLivedToken}` } }
+            );
+            const waba = await wabaRes.json();
+            if (waba.error) {
+                console.error(`Failed to fetch WABA ${wabaId}:`, JSON.stringify(waba.error));
+                continue;
+            }
 
-                    const phonesRes = await fetch(`https://graph.facebook.com/v19.0/${waba.id}/phone_numbers?fields=id,display_phone_number`, {
-                        headers: { Authorization: `Bearer ${longLivedToken}` }
-                    });
-                    const phonesData = await phonesRes.json();
+            const businessId = waba.owner_business_info?.id || "direct";
+            const businessName = waba.owner_business_info?.name || "Meta Business";
+            if (!businesses.some(b => b.id === businessId)) {
+                businesses.push({ id: businessId, name: businessName });
+            }
 
-                    if (phonesData.data && phonesData.data.length > 0) {
-                        for (const phone of phonesData.data) {
-                            phoneNumbers.push({
-                                id: phone.id,
-                                displayNumber: phone.display_phone_number || phone.id,
-                                wabaId: waba.id
-                            });
-                        }
-                    }
-                }
+            wabas.push({ id: waba.id, name: waba.name || `WABA ${waba.id}`, businessId });
+
+            const phonesRes = await fetch(
+                `https://graph.facebook.com/v19.0/${waba.id}/phone_numbers?fields=id,display_phone_number`,
+                { headers: { Authorization: `Bearer ${longLivedToken}` } }
+            );
+            const phonesData = await phonesRes.json();
+            for (const phone of phonesData.data || []) {
+                phoneNumbers.push({
+                    id: phone.id,
+                    displayNumber: phone.display_phone_number || phone.id,
+                    wabaId: waba.id
+                });
             }
         }
 

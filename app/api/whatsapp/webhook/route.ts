@@ -22,18 +22,24 @@ export async function POST(req: NextRequest) {
         const signature = req.headers.get("x-hub-signature-256");
         const bodyContent = await req.text();
 
-        if (signature) {
-            const secret = process.env.WHATSAPP_APP_SECRET;
-            if (secret) {
-                const expectedSignature = `sha256=${crypto
-                    .createHmac("sha256", secret)
-                    .update(bodyContent, "utf-8")
-                    .digest("hex")}`;
-                
-                if (signature !== expectedSignature) {
-                    console.warn("Invalid WhatsApp Webhook Signature");
-                    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-                }
+        // When the app secret is configured, a valid signature is mandatory —
+        // otherwise anyone could POST fake delivery/read statuses.
+        const secret = process.env.WHATSAPP_APP_SECRET;
+        if (secret) {
+            if (!signature) {
+                return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+            }
+
+            const expectedSignature = `sha256=${crypto
+                .createHmac("sha256", secret)
+                .update(bodyContent, "utf-8")
+                .digest("hex")}`;
+
+            const sigBuf = Buffer.from(signature);
+            const expBuf = Buffer.from(expectedSignature);
+            if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+                console.warn("Invalid WhatsApp Webhook Signature");
+                return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
             }
         }
 

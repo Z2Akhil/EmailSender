@@ -6,19 +6,24 @@ import { Campaign } from "@/models/Campaign";
 import { ContactList } from "@/models/Contact";
 import { z } from "zod";
 
+// Empty strings are allowed on channel-dependent fields: the campaign form
+// always submits the full form state, and WhatsApp campaigns legitimately
+// have no subject/fromEmail.
 const campaignUpdateSchema = z.object({
     name: z.string().min(1).optional(),
-    subject: z.string().min(1).optional(),
-    fromName: z.string().min(1).optional(),
-    fromEmail: z.string().email().optional(),
+    channel: z.enum(["EMAIL", "WHATSAPP"]).optional(),
+    subject: z.string().optional(),
+    fromName: z.string().optional(),
+    fromEmail: z.string().email().optional().or(z.literal("")),
     replyTo: z.string().email().optional().or(z.literal("")),
-    provider: z.enum(["SES", "SMTP"]).optional(),
+    provider: z.enum(["SES", "SMTP", "WHATSAPP"]).optional(),
     templateId: z.string().optional(),
     htmlContent: z.string().optional(),
     emailDesign: z.any().optional(),
+    textContent: z.string().optional(),
     recipientListId: z.string().optional(),
     domainId: z.string().optional().or(z.literal("")),
-    status: z.enum(["DRAFT", "SCHEDULED", "SENDING", "SENT", "ARCHIVED"]).optional(),
+    status: z.enum(["DRAFT", "SCHEDULED", "SENDING", "SENT", "CANCELLED"]).optional(),
     scheduledAt: z.string().datetime().nullable().optional(),
 });
 
@@ -67,12 +72,15 @@ export async function PATCH(
 
         await connectDB();
 
-        // Handle empty string for domainId by unsetting it 
+        // Handle empty string for domainId by unsetting it
         if (validated.domainId === "") {
             delete validated.domainId;
             // Explicitly unset it in DB if they are removing the domain
             (validated as any).$unset = { domainId: "" };
         }
+        // Empty ObjectId strings would throw CastErrors on save
+        if (validated.templateId === "") delete validated.templateId;
+        if (validated.recipientListId === "") delete validated.recipientListId;
 
         // If recipient list changed, update the total recipients count
         if (validated.recipientListId) {

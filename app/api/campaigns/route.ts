@@ -26,6 +26,10 @@ const campaignSchema = z.object({
         if (!data.fromName) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "From name is required", path: ["fromName"] });
         if (!data.fromEmail) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "From email is required", path: ["fromEmail"] });
     }
+    if (data.channel === "WHATSAPP" && !data.templateId) {
+        // WhatsApp can only send pre-approved Meta templates — a campaign without one can never send
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A WhatsApp template is required", path: ["templateId"] });
+    }
 });
 
 export async function GET(req: NextRequest) {
@@ -63,6 +67,14 @@ export async function POST(req: NextRequest) {
         // Handle empty string for domainId by deleting it so Mongoose doesn't throw a CastError
         if (validated.domainId === "") {
             delete (validated as any).domainId;
+        }
+        if (validated.templateId === "") {
+            delete (validated as any).templateId;
+        }
+
+        // WhatsApp campaigns always route via the WhatsApp provider
+        if (validated.channel === "WHATSAPP") {
+            validated.provider = "WHATSAPP";
         }
 
         // Fetch the list to get the actual contact count

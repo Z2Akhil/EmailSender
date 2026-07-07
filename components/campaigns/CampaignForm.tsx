@@ -7,18 +7,81 @@ import {
     ArrowLeft, Check, ChevronRight, Settings, Layout,
     FileText, Users, Send, Loader2, Search, Plus, LayoutGrid, List
 } from "lucide-react";
-import { MessageCircle, Mail } from "lucide-react";
+import { MessageCircle, Mail, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { Campaign, Template, ContactList, Domain, ApiResponse } from "@/types";
 import { TemplateCard } from "@/components/templates/TemplateCard";
-import type { EmailEditorWrapperRef } from "@/components/campaigns/EmailEditorWrapper";
+import type { SimpleEmailEditorRef } from "@/components/templates/SimpleEmailEditor";
 
-const EmailEditorWrapper = dynamic(
-    () => import("@/components/campaigns/EmailEditorWrapper").then(mod => mod.EmailEditorWrapper),
-    { ssr: false }
+const SimpleEmailEditor = dynamic(
+    () => import("@/components/templates/SimpleEmailEditor").then(mod => mod.SimpleEmailEditor),
+    { ssr: false, loading: () => <div className="min-h-[420px] bg-gray-50 rounded-2xl animate-pulse" /> }
 );
+
+/** Renders a Meta template definition as a WhatsApp-style chat bubble. */
+function WhatsappTemplatePreview({ template }: { template?: Template }) {
+    if (!template) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-10">
+                <MessageCircle className="w-12 h-12 text-gray-200 mb-4" />
+                <h3 className="font-bold text-gray-900">No template selected</h3>
+                <p className="text-gray-500 text-sm mt-1">Go back to the Template step and pick an approved WhatsApp template.</p>
+            </div>
+        );
+    }
+
+    const components: any[] = (template as any).whatsappTemplateComponents || [];
+    const header = components.find(c => String(c?.type).toUpperCase() === "HEADER");
+    const body = components.find(c => String(c?.type).toUpperCase() === "BODY");
+    const footer = components.find(c => String(c?.type).toUpperCase() === "FOOTER");
+    const buttons = components.find(c => String(c?.type).toUpperCase() === "BUTTONS");
+
+    // Show {{1}} filled with an example so users understand personalization
+    const fillVars = (text?: string) =>
+        String(text || "").replace(/\{\{\s*1\s*\}\}/g, "«FirstName»");
+
+    return (
+        <div className="flex-1 bg-[#e5ddd5] p-6 sm:p-10 flex items-start justify-center overflow-auto">
+            <div className="w-full max-w-sm">
+                <div className="bg-white rounded-lg rounded-tl-none shadow-sm p-3 space-y-2">
+                    {header && String(header.format || "TEXT").toUpperCase() === "TEXT" && (
+                        <p className="text-sm font-bold text-gray-900 whitespace-pre-wrap">{fillVars(header.text)}</p>
+                    )}
+                    {header && String(header.format || "").toUpperCase() !== "TEXT" && header.format && (
+                        <div className="bg-gray-100 rounded-md h-32 flex items-center justify-center text-xs text-gray-400 font-semibold uppercase">
+                            {header.format} header
+                        </div>
+                    )}
+                    {body && (
+                        <p className="text-sm text-gray-800 whitespace-pre-wrap">{fillVars(body.text)}</p>
+                    )}
+                    {footer && (
+                        <p className="text-xs text-gray-400 whitespace-pre-wrap">{footer.text}</p>
+                    )}
+                    <p className="text-[10px] text-gray-400 text-right">
+                        {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                </div>
+                {buttons?.buttons?.length > 0 && (
+                    <div className="mt-1 space-y-1">
+                        {buttons.buttons.map((b: any, i: number) => (
+                            <div key={i} className="bg-white rounded-lg shadow-sm py-2 text-center text-sm font-semibold text-[#00a5f4]">
+                                {b.text}
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <p className="text-[11px] text-gray-500 mt-4 text-center">
+                    Template <span className="font-mono font-semibold">{(template as any).whatsappTemplateName}</span>
+                    {" · "}{(template as any).whatsappTemplateLanguage} · «FirstName» is filled per recipient
+                </p>
+            </div>
+        </div>
+    );
+}
 
 type Step = "SETTINGS" | "TEMPLATE" | "CONTENT" | "RECIPIENTS" | "REVIEW";
 
@@ -61,7 +124,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         channel: initialData?.channel || "EMAIL",
     });
 
-    const emailEditorRef = useRef<EmailEditorWrapperRef>(null);
+    const emailEditorRef = useRef<SimpleEmailEditorRef>(null);
 
     const urlTemplateId = searchParams.get("templateId");
 
@@ -97,7 +160,10 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
             if (!res.ok) throw new Error("Failed to fetch templates");
             return res.json();
         },
-        enabled: currentStep === "TEMPLATE" || !!urlTemplateId,
+        // WhatsApp content/review steps render the selected template's preview,
+        // so keep the list available there too
+        enabled: currentStep === "TEMPLATE" || !!urlTemplateId ||
+            (formData.channel === "WHATSAPP" && (currentStep === "CONTENT" || currentStep === "REVIEW")),
     });
 
     const [isTemplateLoading, setIsTemplateLoading] = useState(false);
@@ -157,6 +223,16 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         },
     });
 
+    const { data: whatsappStatus } = useQuery<{ configured: boolean }>({
+        queryKey: ["whatsapp-status"],
+        queryFn: async () => {
+            const res = await fetch("/api/whatsapp/auth");
+            if (!res.ok) throw new Error("Failed to fetch WhatsApp status");
+            return res.json();
+        },
+        enabled: formData.channel === "WHATSAPP",
+    });
+
     const templates = templatesData?.data || [];
     const verifiedDomains = domainsData?.data?.filter(d => d.verificationStatus === "VERIFIED") || [];
     const isSmtpConfigured = !!smtpData?.data?.smtpHost;
@@ -173,7 +249,23 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
 
     const currentStepIndex = STEPS.findIndex(s => s.id === currentStep);
 
-    const handleNext = () => {
+    const handleNext = async () => {
+        // Leaving the content step: capture the editor's current state so
+        // validation, the review preview, and the saved campaign all reflect
+        // what the user actually built (the editor doesn't sync per keystroke)
+        if (currentStep === "CONTENT" && formData.channel === "EMAIL" && emailEditorRef.current) {
+            if (emailEditorRef.current.isEmpty()) {
+                toast.error("Email content is empty. Add something before continuing.");
+                return;
+            }
+            const exported = emailEditorRef.current.getHtml();
+            setFormData(prev => ({
+                ...prev,
+                htmlContent: exported.html,
+                emailDesign: { editor: "tiptap", content: exported.json },
+            }));
+        }
+
         const nextStep = STEPS[currentStepIndex + 1];
         if (nextStep) setCurrentStep(nextStep.id);
     };
@@ -217,15 +309,12 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
             let finalHtml = formData.htmlContent;
             let finalDesign = formData.emailDesign;
 
-            // If we are on the content step and using email, export the latest design
-            if (formData.channel === "EMAIL" && emailEditorRef.current) {
-                const exported = await emailEditorRef.current.exportHtml();
-                if (exported.html && exported.design) {
-                    finalHtml = exported.html;
-                    finalDesign = exported.design;
-                    // Update local state too
-                    setFormData(prev => ({ ...prev, htmlContent: finalHtml, emailDesign: finalDesign }));
-                }
+            // If the editor is mounted (content step), export its latest state
+            if (formData.channel === "EMAIL" && emailEditorRef.current && !emailEditorRef.current.isEmpty()) {
+                const exported = emailEditorRef.current.getHtml();
+                finalHtml = exported.html;
+                finalDesign = { editor: "tiptap", content: exported.json };
+                setFormData(prev => ({ ...prev, htmlContent: finalHtml, emailDesign: finalDesign }));
             }
 
             const payload = {
@@ -365,6 +454,19 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                     </button>
                                 </div>
                             </div>
+
+                            {formData.channel === "WHATSAPP" && whatsappStatus && !whatsappStatus.configured && (
+                                <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                    <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-semibold text-amber-800">WhatsApp is not connected</p>
+                                        <p className="text-xs text-amber-700 mt-0.5">
+                                            You can draft this campaign, but sending will fail until you{" "}
+                                            <Link href="/dashboard/settings/whatsapp" className="underline font-semibold">connect your Meta account</Link>.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="space-y-2">
                                 <label className="text-sm font-semibold text-gray-700">Internal Campaign Name</label>
@@ -566,7 +668,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                 ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
                                 : "flex flex-col gap-4"
                             }>
-                                {templateViewMode === "grid" && (
+                                {templateViewMode === "grid" && formData.channel === "EMAIL" && (
                                     <button
                                         onClick={() => handleNext()}
                                         className="group aspect-[4/5] bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center p-6 text-center hover:border-blue-300 hover:bg-blue-50/30 transition-all"
@@ -592,13 +694,30 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                             <div className="flex-1 flex flex-col items-center justify-center text-center py-10">
                                 <Layout className="w-12 h-12 text-gray-200 mb-4" />
                                 <h3 className="font-bold text-gray-900">No templates found</h3>
-                                <p className="text-gray-500 text-sm mt-1">Try a different search term or start from scratch.</p>
-                                <button
-                                    onClick={() => setTemplateSearch("")}
-                                    className="mt-4 text-blue-600 text-sm font-semibold hover:underline"
-                                >
-                                    Clear search
-                                </button>
+                                {formData.channel === "WHATSAPP" ? (
+                                    <>
+                                        <p className="text-gray-500 text-sm mt-1 max-w-sm">
+                                            WhatsApp templates come from your Meta Business account. Create them there,
+                                            then sync them on the Templates page.
+                                        </p>
+                                        <Link
+                                            href="/dashboard/templates"
+                                            className="mt-4 text-blue-600 text-sm font-semibold hover:underline"
+                                        >
+                                            Go to Templates & Sync
+                                        </Link>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-gray-500 text-sm mt-1">Try a different search term or start from scratch.</p>
+                                        <button
+                                            onClick={() => setTemplateSearch("")}
+                                            className="mt-4 text-blue-600 text-sm font-semibold hover:underline"
+                                        >
+                                            Clear search
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>
@@ -684,21 +803,31 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                 {currentStep === "CONTENT" && (
                     <div className="p-8 flex flex-col flex-1">
                         <div className="mb-6">
-                            <h2 className="text-xl font-bold text-gray-900">Edit Content</h2>
-                            <p className="text-gray-500 text-sm mt-1">Customize your email message</p>
+                            <h2 className="text-xl font-bold text-gray-900">
+                                {formData.channel === "WHATSAPP" ? "Message Preview" : "Edit Content"}
+                            </h2>
+                            <p className="text-gray-500 text-sm mt-1">
+                                {formData.channel === "WHATSAPP"
+                                    ? "WhatsApp messages use pre-approved Meta templates — edit them in Meta Business Manager, then re-sync"
+                                    : "Customize your email message"}
+                            </p>
                         </div>
 
                         <div className="flex-1 border border-gray-100 rounded-2xl overflow-hidden flex flex-col bg-white">
                             {formData.channel === "WHATSAPP" ? (
-                                <textarea
-                                    className="flex-1 w-full p-6 font-mono text-sm resize-none focus:outline-none bg-gray-50 text-gray-500"
-                                    value="WhatsApp templates are managed in the Meta Business Manager and synced here. Read-only view."
-                                    readOnly={true}
+                                <WhatsappTemplatePreview
+                                    template={templates.find(t => (t.id || (t as any)._id) === formData.templateId)}
                                 />
                             ) : (
-                                <EmailEditorWrapper 
-                                    ref={emailEditorRef} 
-                                    initialDesign={formData.emailDesign}
+                                <SimpleEmailEditor
+                                    ref={emailEditorRef}
+                                    // TipTap accepts its own JSON or an HTML string —
+                                    // legacy drag-and-drop designs fall back to their HTML
+                                    initialContent={
+                                        formData.emailDesign?.editor === "tiptap"
+                                            ? formData.emailDesign.content
+                                            : formData.htmlContent || ""
+                                    }
                                 />
                             )}
                         </div>
@@ -783,13 +912,19 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                     <Layout className="w-4 h-4" />
                                     Content Preview
                                 </h3>
-                                <div className="flex-1 bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                                    <div className="h-full w-full bg-gray-50 p-4 overflow-auto">
-                                        <div
-                                            className="bg-white shadow-sm rounded-lg p-6 min-h-[300px] text-sm"
-                                            dangerouslySetInnerHTML={{ __html: formData.htmlContent }}
+                                <div className="flex-1 bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm flex flex-col">
+                                    {formData.channel === "WHATSAPP" ? (
+                                        <WhatsappTemplatePreview
+                                            template={templates.find(t => (t.id || (t as any)._id) === formData.templateId)}
                                         />
-                                    </div>
+                                    ) : (
+                                        <div className="h-full w-full bg-gray-50 p-4 overflow-auto">
+                                            <div
+                                                className="bg-white shadow-sm rounded-lg p-6 min-h-[300px] text-sm"
+                                                dangerouslySetInnerHTML={{ __html: formData.htmlContent }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -886,9 +1021,9 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                 !formData.name ||
                                 (formData.channel === "EMAIL" && (!formData.subject || !formData.fromName || !formData.fromEmail))
                             )) ||
-                            (currentStep === "TEMPLATE" && !formData.templateId) ||
-                            (currentStep === "RECIPIENTS" && !formData.recipientListId) ||
-                            (currentStep === "CONTENT" && !formData.htmlContent && formData.channel === "EMAIL")
+                            // Email may start from scratch; WhatsApp must pick an approved template
+                            (currentStep === "TEMPLATE" && formData.channel === "WHATSAPP" && !formData.templateId) ||
+                            (currentStep === "RECIPIENTS" && !formData.recipientListId)
                         }
                         className="flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-200"
                     >

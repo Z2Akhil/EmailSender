@@ -9,7 +9,11 @@ const templateSchema = z.object({
     name: z.string().min(1, "Template name is required"),
     description: z.string().optional(),
     htmlContent: z.string().min(1, "Content is required"),
-    thumbnailUrl: z.string().optional(),
+    // Editor design JSON ({ editor: "tiptap", content }) — without it a saved
+    // template can never be re-edited
+    emailDesign: z.any().optional(),
+    textContent: z.string().optional(),
+    thumbnail: z.string().optional(),
 });
 
 const OFFICIAL_TEMPLATES = [
@@ -102,7 +106,7 @@ export async function GET(req: NextRequest) {
                 { workspaceId: session.user.workspaceId }
             ]
         })
-            .select("-htmlContent")
+            .select("-htmlContent -emailDesign")
             .sort({ createdAt: -1 });
 
         return NextResponse.json({ success: true, data: templates });

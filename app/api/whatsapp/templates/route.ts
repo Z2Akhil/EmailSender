@@ -42,6 +42,12 @@ export async function GET(req: Request) {
 
         // Let's store or update them
         for (const tmpl of templates) {
+            // Body text preview makes the template recognizable in the UI
+            const bodyComponent = (tmpl.components || []).find((c: any) => c.type === "BODY");
+            const description = bodyComponent?.text
+                ? String(bodyComponent.text).slice(0, 140)
+                : "Synced from Meta Business Manager";
+
             await Template.findOneAndUpdate(
                 {
                     workspaceId,
@@ -51,6 +57,7 @@ export async function GET(req: Request) {
                 },
                 {
                     name: tmpl.name,
+                    description,
                     type: "WHATSAPP",
                     whatsappTemplateName: tmpl.name,
                     whatsappTemplateLanguage: tmpl.language,
@@ -62,10 +69,15 @@ export async function GET(req: Request) {
             );
         }
 
-        return NextResponse.json({ templates }, { status: 200 });
+        return NextResponse.json({ synced: templates.length, templates }, { status: 200 });
 
     } catch (error) {
         console.error("WhatsApp Template Sync error:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
+}
+
+// The templates page triggers sync with POST; support both verbs
+export async function POST(req: Request) {
+    return GET(req);
 }

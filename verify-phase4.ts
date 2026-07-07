@@ -18,7 +18,7 @@ async function runVerification() {
         console.log("✅ 2. Worker initialized");
 
         // Setup Test Data
-        let testWorkspaceId = new mongoose.Types.ObjectId();
+        const testWorkspaceId = new mongoose.Types.ObjectId();
 
         const list = await ContactList.create({
             name: "Test Verification List",

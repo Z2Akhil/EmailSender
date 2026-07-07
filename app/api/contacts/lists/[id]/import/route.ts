@@ -134,13 +134,20 @@ export async function POST(
                     break; // Stop importing further rows
                 }
 
+                const importedWhatsapp = mapping.whatsappNumber
+                    ? row[mapping.whatsappNumber]?.toString().replace(/[^0-9]/g, "") || undefined
+                    : undefined;
+
                 await Contact.create({
                     email: rawEmail,
                     firstName: mapping.firstName ? row[mapping.firstName]?.toString().trim() || undefined : undefined,
                     lastName: mapping.lastName ? row[mapping.lastName]?.toString().trim() || undefined : undefined,
                     company: mapping.company ? row[mapping.company]?.toString().trim() || undefined : undefined,
                     phone: mapping.phone ? row[mapping.phone]?.toString().trim() || undefined : undefined,
-                    whatsappNumber: mapping.whatsappNumber ? row[mapping.whatsappNumber]?.toString().replace(/[^0-9]/g, "") || undefined : undefined,
+                    whatsappNumber: importedWhatsapp,
+                    // Importing a WhatsApp number implies the list owner asserts
+                    // consent — without the flag every send skips the contact
+                    whatsappOptIn: !!importedWhatsapp,
                     listId: id,
                     workspaceId: session.user.workspaceId,
                     status: "ACTIVE",

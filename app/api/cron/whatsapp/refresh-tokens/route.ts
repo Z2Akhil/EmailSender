@@ -9,9 +9,9 @@ import { decrypt, encrypt } from "@/lib/crypto";
  * It finds WhatsApp tokens expiring soon and refreshes them via the Meta API.
  */
 export async function GET(req: Request) {
-    // Basic security check for cron (using a secret header or internal network)
+    // Basic security check for cron — fail closed if CRON_SECRET is not configured
     const authHeader = req.headers.get("authorization");
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

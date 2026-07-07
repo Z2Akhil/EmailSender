@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, FileText, Loader2, LayoutGrid, List, X } from "lucide-react";
+import { Plus, Search, FileText, Loader2, LayoutGrid, List } from "lucide-react";
+import { toast } from "sonner";
 import { Template, ApiResponse } from "@/types";
 import { TemplateCard } from "@/components/templates/TemplateCard";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -48,10 +49,38 @@ export default function TemplatesPage() {
             if (!res.ok) throw new Error(json.error || "Failed to sync templates");
             return json;
         },
-        onSuccess: () => {
+        onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ["templates"] });
+            toast.success(
+                data.synced > 0
+                    ? `Synced ${data.synced} approved WhatsApp template${data.synced === 1 ? "" : "s"} from Meta`
+                    : "No approved WhatsApp templates found in your Meta account"
+            );
+        },
+        onError: (err: any) => {
+            toast.error(err.message || "Failed to sync WhatsApp templates");
         }
     });
+
+    const deleteMutation = useMutation({
+        mutationFn: async (template: Template) => {
+            const res = await fetch(`/api/templates/${template.id}`, { method: "DELETE" });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || "Failed to delete template");
+            return json;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["templates"] });
+            toast.success("Template deleted");
+        },
+        onError: (err: any) => toast.error(err.message || "Failed to delete template"),
+    });
+
+    const handleDelete = (template: Template) => {
+        if (confirm(`Delete template "${template.name}"? This cannot be undone.`)) {
+            deleteMutation.mutate(template);
+        }
+    };
 
     const handleSelect = (template: Template) => {
         router.push(`/dashboard/campaigns/new?templateId=${template.id}`);
@@ -62,8 +91,8 @@ export default function TemplatesPage() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Email Templates</h1>
-                    <p className="text-gray-500 mt-1">Select a starting point for your next campaign</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Templates</h1>
+                    <p className="text-gray-500 mt-1">Email and WhatsApp starting points for your campaigns</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
@@ -155,6 +184,7 @@ export default function TemplatesPage() {
                             template={template}
                             layout={viewMode}
                             onSelect={handleSelect}
+                            onDelete={handleDelete}
                             onPreview={() => window.open(`/api/templates/${template.id}/preview`, '_blank')}
                         />
                     ))}

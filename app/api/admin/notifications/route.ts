@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Notification from "@/models/Notification";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export async function POST(request: Request) {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     try {
         await connectDB();
         const body = await request.json();
@@ -33,6 +37,9 @@ export async function POST(request: Request) {
 
 // Fetch logs and alerts for the admin monitor page
 export async function GET() {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     try {
         await connectDB();
 
