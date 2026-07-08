@@ -7,6 +7,7 @@ import Domain from "@/models/Domain";
 import { Workspace } from "@/models/Workspace";
 import { Template } from "@/models/Template";
 import { sendEmail, injectComplianceFooter } from "./email-service";
+import { composeSharedSender } from "./shared-sending";
 import { sendWhatsappMessage, buildTemplateComponents } from "./whatsapp-service";
 import { decrypt, signTrackingUrl } from "./crypto";
 import mongoose from "mongoose";
@@ -102,14 +103,25 @@ export const initWorker = () => {
                     }
                 }
 
-                // 9. Send Email
+                // 9. Send Email — shared campaigns re-resolve the platform
+                // identity from env at send time (stored fromEmail may be stale)
+                let fromName = campaign.fromName;
+                let fromEmail = campaign.fromEmail;
+                let replyTo = campaign.replyTo;
+                if (campaign.provider === "SHARED") {
+                    if (!process.env.SHARED_FROM_EMAIL) {
+                        throw new Error("SHARED_FROM_EMAIL not configured in worker environment");
+                    }
+                    ({ fromName, fromEmail } = composeSharedSender(campaign.fromName));
+                }
+
                 const result = await sendEmail({
                     to: recipientEmail,
                     subject: campaign.subject,
                     html: html,
-                    fromName: campaign.fromName,
-                    fromEmail: campaign.fromEmail,
-                    replyTo: campaign.replyTo,
+                    fromName,
+                    fromEmail,
+                    replyTo,
                     smtpConfig,
                 });
 

@@ -19,6 +19,10 @@ export interface IWorkspace extends Document {
     whatsappAccessToken?: string;
     whatsappPhoneNumberId?: string;
     whatsappBusinessAccountId?: string;
+    // Onboarding
+    onboardingCompletedAt?: Date;
+    onboardingSkipped?: boolean;
+    checklistDismissedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -57,6 +61,11 @@ const WorkspaceSchema = new Schema<IWorkspace>(
         whatsappAccessToken: { type: String }, // Should be encrypted
         whatsappPhoneNumberId: { type: String },
         whatsappBusinessAccountId: { type: String },
+        // Onboarding: set on wizard finish or skip; undefined on legacy
+        // workspaces (handled by an activity check, never a migration)
+        onboardingCompletedAt: { type: Date },
+        onboardingSkipped: { type: Boolean },
+        checklistDismissedAt: { type: Date },
     },
     {
         timestamps: true,

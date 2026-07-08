@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
 import { Contact } from "@/models/Contact";
+import { Workspace } from "@/models/Workspace";
+import Domain from "@/models/Domain";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -48,6 +50,13 @@ export async function GET(req: NextRequest) {
             .sort({ updatedAt: -1 })
             .limit(5);
 
+        // 7. Setup checklist state for the dashboard widget
+        const [workspace, domainCount] = await Promise.all([
+            Workspace.findById(workspaceId)
+                .select("whatsappAccessToken whatsappPhoneNumberId checklistDismissedAt"),
+            Domain.countDocuments({ workspaceId }),
+        ]);
+
         return NextResponse.json({
             success: true,
             data: {
@@ -58,7 +67,14 @@ export async function GET(req: NextRequest) {
                 avgEmailOpenRate,
                 avgWhatsappOpenRate,
                 avgEmailClickRate,
-                recentCampaigns
+                recentCampaigns,
+                checklist: {
+                    hasContacts: totalContacts > 0,
+                    hasSentCampaign: totalCampaigns > 0,
+                    hasCustomDomain: domainCount > 0,
+                    whatsappConnected: !!(workspace?.whatsappAccessToken && workspace?.whatsappPhoneNumberId),
+                    dismissed: !!workspace?.checklistDismissedAt,
+                },
             }
         });
     } catch (error) {

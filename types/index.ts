@@ -72,7 +72,7 @@ export interface Campaign {
     sentAt?: Date | null;
     workspaceId: string;
     channel?: "EMAIL" | "WHATSAPP";
-    provider?: "SES" | "SMTP";
+    provider?: "SES" | "SMTP" | "SHARED";
     domainId?: string | null;
     templateId?: string | null;
     recipientListId?: string | null;
@@ -96,6 +96,8 @@ export interface Template {
     htmlContent?: string;
     emailDesign?: any; // Stores Unlayer JSON
     thumbnail?: string | null;
+    category?: string | null;
+    defaultSubject?: string | null;
     workspaceId?: string | null;
     isGlobal: boolean;
     type?: "EMAIL" | "WHATSAPP";

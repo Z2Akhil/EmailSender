@@ -6,6 +6,7 @@ import { Campaign } from "@/models/Campaign";
 import { Contact } from "@/models/Contact";
 import { Workspace } from "@/models/Workspace";
 import { Template } from "@/models/Template";
+import { isSharedSendingEnabled } from "@/lib/shared-sending";
 import { addEmailJob, addWhatsappJob } from "@/lib/queue";
 import { checkPlanLimits } from "@/lib/stripe";
 import { strictRateLimit } from "@/lib/ratelimit";
@@ -123,6 +124,22 @@ export async function POST(
         }
 
         // --- Email Campaign ---
+
+        // Shared zero-setup sending pre-checks: fail fast before enqueueing
+        if (campaign.provider === "SHARED") {
+            if (!isSharedSendingEnabled()) {
+                return NextResponse.json({
+                    success: false,
+                    error: "Shared sending is not configured on this server. Use your own domain or SMTP instead.",
+                }, { status: 400 });
+            }
+            if (!campaign.replyTo) {
+                return NextResponse.json({
+                    success: false,
+                    error: "Shared campaigns require a reply-to email so recipients can reach you.",
+                }, { status: 400 });
+            }
+        }
 
         // Check Plan Limits (Email Volume)
         const limitCheck = await checkPlanLimits(session.user.workspaceId, "emails");

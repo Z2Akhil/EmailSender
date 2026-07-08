@@ -6,6 +6,22 @@ import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
+import Link from "@tiptap/extension-link";
+
+// Default Link mark strips the style attribute, which would destroy CTA
+// buttons (inline-styled <a>) on every edit round-trip. Keep it.
+const StyledLink = Link.extend({
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            style: {
+                default: null,
+                parseHTML: (el: HTMLElement) => el.getAttribute("style"),
+                renderHTML: (attrs: Record<string, any>) => (attrs.style ? { style: attrs.style } : {}),
+            },
+        };
+    },
+});
 import {
     Bold, Italic, Underline as UnderlineIcon, Strikethrough,
     List, ListOrdered, Quote, Minus, Link2, Image as ImageIcon,
@@ -23,28 +39,10 @@ interface Props {
     initialContent?: any; // TipTap JSON
 }
 
-/**
- * Wraps the editor's HTML in an email-client-friendly shell:
- * centered 600px column, safe fonts, sensible defaults.
- */
-export function wrapEmailHtml(innerHtml: string): string {
-    return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-<body style="margin:0;padding:0;background-color:#f4f4f7;">
-  <div style="display:none;max-height:0;overflow:hidden;">&nbsp;</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;padding:24px 0;">
-    <tr><td align="center">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;">
-        <tr><td style="padding:32px 40px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#333333;">
-${innerHtml}
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
-}
+// Canonical home is lib/email-html.ts (server code — template seeds — needs it
+// without pulling in TipTap); re-exported here for backwards compatibility
+import { wrapEmailHtml } from "@/lib/email-html";
+export { wrapEmailHtml };
 
 const VARIABLES = [
     { label: "First name", value: "{{firstName}}", icon: User },
@@ -78,8 +76,9 @@ export const SimpleEmailEditor = forwardRef<SimpleEmailEditorRef, Props>(({ init
         extensions: [
             StarterKit.configure({
                 heading: { levels: [1, 2] },
-                link: { openOnClick: false },
+                link: false,
             }),
+            StyledLink.configure({ openOnClick: false }),
             Image.configure({ inline: false }),
             TextAlign.configure({ types: ["heading", "paragraph"] }),
             Placeholder.configure({

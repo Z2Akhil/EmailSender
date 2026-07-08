@@ -44,6 +44,12 @@ Root-level `proxy.ts` is the global middleware: per-IP rate limiting on `/api/*`
 
 Per send: workspace custom SMTP (if configured) → Amazon SES → SendGrid → log-only if nothing is configured. Custom SMTP passwords and WhatsApp access tokens are encrypted at rest with AES-256-GCM (`lib/crypto.ts`, keyed by `ENCRYPTION_KEY` — falls back to an insecure dev key outside production).
 
+Campaigns with `provider: "SHARED"` use zero-setup shared sending (`lib/shared-sending.ts`): the platform's SES identity from `SHARED_FROM_EMAIL` (must be set in both app and worker envs), display name composed as `"<brand> via <NEXT_PUBLIC_APP_NAME>"`, Reply-To forced to the user's email. API routes force `fromEmail` server-side; never trust the client's value for it. The campaign form defaults to Simple mode when `GET /api/settings/sending` reports it enabled.
+
+### Onboarding
+
+New workspaces (no `onboardingCompletedAt`, zero campaigns/contacts) are redirected from `/dashboard` (server component gate) to the `/dashboard/welcome` wizard. Completion/skip is recorded via `POST /api/onboarding`. The dashboard's setup checklist comes from the `checklist` block in `GET /api/dashboard/stats`. Global starter templates ("the gallery") live in `lib/gallery-templates.ts` — reseed with `POST /api/cron/seed-templates` (CRON_SECRET bearer); template `emailDesign` is `{ editor: "tiptap", content: <html string> }` and bodies must stay within the SimpleEmailEditor's schema (see authoring rules in that file).
+
 ### Campaign lifecycle
 
 Status flow: `DRAFT → SCHEDULED/SENDING → SENT` (or `CANCELLED`). Scheduled sends rely on a Vercel cron (`vercel.json`) hitting `/api/cron/dispatch-scheduled` every minute. Engagement flows back through public endpoints under `app/api/track/` (open pixel, click redirect, bounce) and `/api/unsubscribe`, updating `CampaignRecipient` status and campaign counters. Sends are suppressed for contacts not in `ACTIVE` status.

@@ -15,7 +15,7 @@ export interface ICampaign extends Document {
     sentAt?: Date;
     workspaceId: mongoose.Types.ObjectId;
     channel: "EMAIL" | "WHATSAPP";
-    provider?: "SES" | "SMTP" | "WHATSAPP";
+    provider?: "SES" | "SMTP" | "SHARED" | "WHATSAPP";
     domainId?: mongoose.Types.ObjectId;
     templateId?: mongoose.Types.ObjectId;
     recipientListId?: mongoose.Types.ObjectId;
@@ -74,7 +74,8 @@ const CampaignSchema = new Schema<ICampaign>(
         sentAt: { type: Date },
         workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
         channel: { type: String, enum: ["EMAIL", "WHATSAPP"], default: "EMAIL" },
-        provider: { type: String, enum: ["SES", "SMTP", "WHATSAPP"], default: "SES" },
+        // SHARED = zero-setup sending via the platform's SES identity
+        provider: { type: String, enum: ["SES", "SMTP", "SHARED", "WHATSAPP"], default: "SES" },
         domainId: { type: Schema.Types.ObjectId, ref: "Domain" },
         templateId: { type: Schema.Types.ObjectId, ref: "Template" },
         recipientListId: { type: Schema.Types.ObjectId, ref: "ContactList" },

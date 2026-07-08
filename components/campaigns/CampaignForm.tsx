@@ -120,7 +120,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         textContent: initialData?.textContent || "",
         recipientListId: initialData?.recipientListId || "",
         domainId: initialData?.domainId || "",
-        provider: (initialData as any)?.provider || "SES",
+        provider: ((initialData as any)?.provider || "SES") as "SES" | "SMTP" | "SHARED" | "WHATSAPP",
         channel: initialData?.channel || "EMAIL",
     });
 
@@ -129,6 +129,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
     const urlTemplateId = searchParams.get("templateId");
 
     const [templateSearch, setTemplateSearch] = useState("");
+    const [templateCategory, setTemplateCategory] = useState<string | null>(null);
     const [listSearch, setListSearch] = useState("");
     const [templateViewMode, setTemplateViewMode] = useState<"grid" | "list">("grid");
 
@@ -181,6 +182,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                         templateId: template.id || (template as any)._id,
                         htmlContent: template.htmlContent || "",
                         emailDesign: template.emailDesign || null,
+                        subject: prev.subject || template.defaultSubject || prev.subject,
                     }));
                 }
             } catch (err) {
@@ -233,11 +235,60 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         enabled: formData.channel === "WHATSAPP",
     });
 
+    const { data: sendingData, isLoading: isLoadingSending } = useQuery<ApiResponse<{
+        sharedEnabled: boolean;
+        sharedFromEmail: string | null;
+        sharedFromNameSuffix: string;
+        defaultReplyTo: string | null;
+        workspaceName: string | null;
+    }>>({
+        queryKey: ["sending-settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/settings/sending");
+            if (!res.ok) throw new Error("Failed to fetch sending settings");
+            return res.json();
+        },
+    });
+    const sending = sendingData?.data;
+
+    // Simple mode = zero-setup sending via the platform's shared identity.
+    // Derived once per campaign: new campaigns default to simple when available;
+    // editing keeps whatever the draft was saved with.
+    const [sendingMode, setSendingMode] = useState<"SIMPLE" | "ADVANCED" | null>(null);
+    useEffect(() => {
+        if (!sending || sendingMode !== null) return;
+        if (initialData?.id) {
+            setSendingMode((initialData as any).provider === "SHARED" ? "SIMPLE" : "ADVANCED");
+        } else {
+            setSendingMode(sending.sharedEnabled ? "SIMPLE" : "ADVANCED");
+        }
+    }, [sending, sendingMode, initialData]);
+
+    // Entering simple mode: set provider + prefill brand name and reply-to
+    useEffect(() => {
+        if (sendingMode !== "SIMPLE" || !sending?.sharedEnabled) return;
+        setFormData(prev => ({
+            ...prev,
+            provider: "SHARED",
+            domainId: "",
+            fromEmail: sending.sharedFromEmail || "",
+            fromName: prev.fromName || sending.workspaceName || "",
+            replyTo: prev.replyTo || sending.defaultReplyTo || "",
+        }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sendingMode, sending?.sharedEnabled]);
+
     const templates = templatesData?.data || [];
     const verifiedDomains = domainsData?.data?.filter(d => d.verificationStatus === "VERIFIED") || [];
     const isSmtpConfigured = !!smtpData?.data?.smtpHost;
-    const filteredTemplates = templates.filter(t =>
-        (t.type === formData.channel || (!t.type && formData.channel === "EMAIL")) &&
+    const channelTemplates = templates.filter(t =>
+        t.type === formData.channel || (!t.type && formData.channel === "EMAIL")
+    );
+    const templateCategories = Array.from(
+        new Set(channelTemplates.map(t => t.category).filter(Boolean))
+    ) as string[];
+    const filteredTemplates = channelTemplates.filter(t =>
+        (!templateCategory || t.category === templateCategory) &&
         (t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
             t.description?.toLowerCase().includes(templateSearch.toLowerCase()))
     );
@@ -287,6 +338,8 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                 htmlContent: fullTemplate.htmlContent || "",
                 emailDesign: fullTemplate.emailDesign || null,
                 textContent: "",
+                // Gallery templates suggest a subject — never overwrite a typed one
+                subject: formData.subject || fullTemplate.defaultSubject || formData.subject,
             });
             handleNext();
         } catch (err) {
@@ -493,7 +546,74 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                         />
                                     </div>
 
-                                    {(verifiedDomains.length > 0 && isSmtpConfigured) && (
+                                    {/* Sender configuration: Simple (shared identity) vs Advanced */}
+                                    {(isLoadingSending || sendingMode === null) && (
+                                        <div className="h-24 bg-gray-50 rounded-xl animate-pulse" />
+                                    )}
+
+                                    {sendingMode === "SIMPLE" && sending?.sharedEnabled && (
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-semibold text-gray-700">From Name</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="e.g. Acme Inc"
+                                                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                                        value={formData.fromName}
+                                                        onChange={e => setFormData({ ...formData, fromName: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-semibold text-gray-700">Reply-to Email</label>
+                                                    <input
+                                                        type="email"
+                                                        placeholder="you@yourbrand.com"
+                                                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                                        value={formData.replyTo}
+                                                        onChange={e => setFormData({ ...formData, replyTo: e.target.value })}
+                                                    />
+                                                    <p className="text-[11px] text-gray-400">Replies from recipients land here.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-3.5 bg-blue-50/60 border border-blue-100 rounded-xl">
+                                                <p className="text-xs text-blue-800">
+                                                    Recipients will see:{" "}
+                                                    <span className="font-semibold">
+                                                        &ldquo;{formData.fromName || "Your Brand"} {sending.sharedFromNameSuffix}&rdquo;
+                                                    </span>{" "}
+                                                    <span className="font-mono text-blue-600">&lt;{sending.sharedFromEmail}&gt;</span>
+                                                </p>
+                                                <p className="text-[11px] text-blue-600/70 mt-1">
+                                                    No setup needed — sent through our verified servers.
+                                                </p>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSendingMode("ADVANCED");
+                                                    setFormData(prev => ({ ...prev, provider: "SES", fromEmail: "" }));
+                                                }}
+                                                className="text-xs font-semibold text-gray-500 hover:text-blue-600 underline underline-offset-2"
+                                            >
+                                                Use your own domain or SMTP instead →
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {sendingMode === "ADVANCED" && sending?.sharedEnabled && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setSendingMode("SIMPLE")}
+                                            className="text-xs font-semibold text-gray-500 hover:text-blue-600 underline underline-offset-2"
+                                        >
+                                            ← Switch back to simple sending (no setup needed)
+                                        </button>
+                                    )}
+
+                                    {sendingMode === "ADVANCED" && (verifiedDomains.length > 0 && isSmtpConfigured) && (
                                         <div className="space-y-2">
                                             <label className="text-sm font-semibold text-gray-700">Email Provider</label>
                                             <div className="flex bg-gray-50 p-1 rounded-xl w-fit border border-gray-100">
@@ -522,6 +642,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                         </div>
                                     )}
 
+                                    {sendingMode === "ADVANCED" && (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
                                             <label className="text-sm font-semibold text-gray-700">From Name</label>
@@ -593,6 +714,8 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                             )}
                                         </div>
                                     </div>
+                                    )}
+                                    {sendingMode === "ADVANCED" && (
                                     <div className="space-y-2">
                                         <label className="text-sm font-semibold text-gray-700">Reply-to Email (Optional)</label>
                                         <input
@@ -603,6 +726,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                             onChange={e => setFormData({ ...formData, replyTo: e.target.value })}
                                         />
                                     </div>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -647,6 +771,28 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                 </div>
                             </div>
                         </div>
+
+                        {templateCategories.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 mb-6 -mt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setTemplateCategory(null)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!templateCategory ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-500 hover:border-gray-300"}`}
+                                >
+                                    All
+                                </button>
+                                {templateCategories.map(cat => (
+                                    <button
+                                        key={cat}
+                                        type="button"
+                                        onClick={() => setTemplateCategory(templateCategory === cat ? null : cat)}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold capitalize transition-all ${templateCategory === cat ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-500 hover:border-gray-300"}`}
+                                    >
+                                        {cat}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         {isLoadingTemplates ? (
                             <div className={templateViewMode === "grid"
@@ -879,7 +1025,15 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                                 </div>
                                                 <div>
                                                     <dt className="text-xs text-gray-500">From</dt>
-                                                    <dd className="text-sm font-semibold text-gray-900">{formData.fromName} &lt;{formData.fromEmail}&gt;</dd>
+                                                    <dd className="text-sm font-semibold text-gray-900">
+                                                        {formData.provider === "SHARED"
+                                                            ? `"${formData.fromName} ${sending?.sharedFromNameSuffix || "via BulkMailer"}"`
+                                                            : formData.fromName}{" "}
+                                                        &lt;{formData.fromEmail}&gt;
+                                                    </dd>
+                                                    {formData.provider === "SHARED" && formData.replyTo && (
+                                                        <dd className="text-xs text-gray-500 mt-0.5">Replies go to {formData.replyTo}</dd>
+                                                    )}
                                                 </div>
                                             </>
                                         )}
@@ -1019,7 +1173,11 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                             isTemplateLoading ||
                             (currentStep === "SETTINGS" && (
                                 !formData.name ||
-                                (formData.channel === "EMAIL" && (!formData.subject || !formData.fromName || !formData.fromEmail))
+                                (formData.channel === "EMAIL" && (
+                                    !formData.subject || !formData.fromName ||
+                                    // Simple mode: fromEmail is auto-set but replies must reach the user
+                                    (formData.provider === "SHARED" ? !formData.replyTo : !formData.fromEmail)
+                                ))
                             )) ||
                             // Email may start from scratch; WhatsApp must pick an approved template
                             (currentStep === "TEMPLATE" && formData.channel === "WHATSAPP" && !formData.templateId) ||

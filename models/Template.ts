@@ -9,6 +9,8 @@ export interface ITemplate extends Document {
     emailDesign?: any;
     textContent?: string;
     thumbnail?: string;
+    category?: string;
+    defaultSubject?: string;
     workspaceId?: mongoose.Types.ObjectId;
     isGlobal: boolean;
     whatsappTemplateName?: string;
@@ -27,6 +29,9 @@ const TemplateSchema = new Schema<ITemplate>(
         emailDesign: { type: Schema.Types.Mixed }, // Stores Unlayer JSON
         textContent: { type: String },
         thumbnail: { type: String },
+        // Gallery metadata: use-case tag + suggested subject line
+        category: { type: String, trim: true },
+        defaultSubject: { type: String, trim: true },
         workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace" },
         isGlobal: { type: Boolean, default: false },
         whatsappTemplateName: { type: String },

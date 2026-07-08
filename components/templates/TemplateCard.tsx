@@ -50,6 +50,11 @@ export function TemplateCard({
                             }`}>
                             {template.type === "WHATSAPP" ? "WhatsApp" : "Email"}
                         </span>
+                        {template.category && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-purple-600">
+                                {template.category}
+                            </span>
+                        )}
                     </div>
                     {template.description && (
                         <p className="text-gray-500 text-xs line-clamp-1">
@@ -176,6 +181,11 @@ export function TemplateCard({
                 </div>
 
                 <div className="mt-auto pt-3 border-t border-gray-50 flex items-center justify-between">
+                    {template.category && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-purple-600">
+                            {template.category}
+                        </span>
+                    )}
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${template.type === "WHATSAPP" ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"
                         }`}>
                         {template.type === "WHATSAPP" ? <MessageCircle className="w-3 h-3" /> : <Mail className="w-3 h-3" />}

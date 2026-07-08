@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
 import { sendEmail } from "@/lib/email-service";
+import { isSharedSendingEnabled, composeSharedSender } from "@/lib/shared-sending";
 import { z } from "zod";
 
 const testEmailSchema = z.object({
@@ -58,13 +59,29 @@ export async function POST(
 </div>`;
         html = testBanner + html;
 
+        // Compose the shared sender exactly like the worker does, so the
+        // test email matches what recipients will actually see
+        let fromName = campaign.fromName;
+        let fromEmail = campaign.fromEmail;
+        let replyTo = campaign.replyTo;
+        if (campaign.provider === "SHARED") {
+            if (!isSharedSendingEnabled()) {
+                return NextResponse.json(
+                    { success: false, error: "Shared sending is not configured on this server." },
+                    { status: 400 }
+                );
+            }
+            ({ fromName, fromEmail } = composeSharedSender(campaign.fromName));
+            replyTo = campaign.replyTo || session.user.email || undefined;
+        }
+
         await sendEmail({
             to,
             subject: `[TEST] ${campaign.subject || campaign.name}`,
             html,
-            fromName: campaign.fromName,
-            fromEmail: campaign.fromEmail,
-            replyTo: campaign.replyTo,
+            fromName,
+            fromEmail,
+            replyTo,
         });
 
         return NextResponse.json({

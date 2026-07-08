@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
+import { isSharedSendingEnabled } from "@/lib/shared-sending";
 import { z } from "zod";
 
 const scheduleSchema = z.object({
@@ -53,6 +54,22 @@ export async function POST(
 
         if (!campaign.recipientListId) {
             return NextResponse.json({ success: false, error: "Recipient list not selected" }, { status: 400 });
+        }
+
+        // Fail fast at schedule time — not when the cron fires
+        if (campaign.provider === "SHARED") {
+            if (!isSharedSendingEnabled()) {
+                return NextResponse.json({
+                    success: false,
+                    error: "Shared sending is not configured on this server.",
+                }, { status: 400 });
+            }
+            if (!campaign.replyTo) {
+                return NextResponse.json({
+                    success: false,
+                    error: "Shared campaigns require a reply-to email so recipients can reach you.",
+                }, { status: 400 });
+            }
         }
 
         campaign.status = "SCHEDULED";
