@@ -43,6 +43,38 @@ export async function GET() {
     }
 }
 
+/**
+ * DELETE /api/settings/smtp
+ * Removes the workspace's SMTP server. SMTP is the only send path, so campaigns
+ * cannot send until another server is configured — the send route blocks with a
+ * clear error rather than failing per recipient in the worker.
+ */
+export async function DELETE() {
+    try {
+        const { session, response } = await requireAuth();
+        if (response) return response;
+
+        await connectDB();
+        const workspace = await Workspace.findByIdAndUpdate(
+            session!.user.workspaceId,
+            { $unset: { smtpHost: "", smtpPort: "", smtpUser: "", smtpPass: "", smtpSecure: "" } },
+            { new: true }
+        );
+
+        if (!workspace) {
+            return NextResponse.json({ success: false, error: "Workspace not found" }, { status: 404 });
+        }
+
+        return NextResponse.json({
+            success: true,
+            message: "SMTP configuration removed. Connect an email account before sending campaigns.",
+        });
+    } catch (error) {
+        console.error("[SETTINGS_SMTP_DELETE]", error);
+        return NextResponse.json({ success: false, error: "SMTP_DELETE_ERROR" }, { status: 500 });
+    }
+}
+
 export async function POST(req: NextRequest) {
     let transporter;
     try {

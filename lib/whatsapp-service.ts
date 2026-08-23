@@ -53,6 +53,20 @@ export function buildTemplateComponents(
                     })),
                 });
             }
+        } else if (type === "BUTTONS" && Array.isArray(comp.buttons)) {
+            // Copy-code buttons require a coupon_code parameter per send.
+            // Without a per-campaign code input we reuse the sample code the
+            // template was approved with (stored in the definition's example).
+            comp.buttons.forEach((btn: any, index: number) => {
+                if (String(btn?.type || "").toUpperCase() !== "COPY_CODE") return;
+                const code = Array.isArray(btn.example) ? btn.example[0] : btn.example;
+                components.push({
+                    type: "button",
+                    sub_type: "copy_code",
+                    index,
+                    parameters: [{ type: "coupon_code", coupon_code: String(code || "CODE").slice(0, 15) }],
+                });
+            });
         }
     }
 

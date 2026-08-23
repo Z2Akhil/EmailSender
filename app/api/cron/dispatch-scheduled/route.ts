@@ -1,8 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
-import { Campaign } from "@/models/Campaign";
+import { Campaign, type ICampaign } from "@/models/Campaign";
 import { Contact } from "@/models/Contact";
+import { Template } from "@/models/Template";
+import { Workspace } from "@/models/Workspace";
 import { addEmailJob, addWhatsappJob } from "@/lib/queue";
+
+/**
+ * Reasons a WhatsApp campaign cannot be dispatched right now, or null when it
+ * is good to go. Mirrors the checks in POST /api/campaigns/[id]/send.
+ */
+async function whatsappBlocker(campaign: ICampaign): Promise<string | null> {
+    const workspace = await Workspace.findById(campaign.workspaceId)
+        .select("whatsappAccessToken whatsappPhoneNumberId");
+    if (!workspace?.whatsappAccessToken || !workspace?.whatsappPhoneNumberId) {
+        return "WhatsApp is not connected for this workspace";
+    }
+
+    if (!campaign.templateId) return "campaign has no WhatsApp template selected";
+
+    const template = await Template.findById(campaign.templateId)
+        .select("type whatsappTemplateName");
+    if (!template || template.type !== "WHATSAPP" || !template.whatsappTemplateName) {
+        return "selected template is not a valid WhatsApp template";
+    }
+
+    return null;
+}
 
 /**
  * GET /api/cron/dispatch-scheduled
@@ -35,19 +59,38 @@ export async function GET(req: NextRequest) {
 
         let totalDispatched = 0;
 
+        let skipped = 0;
+
         for (const campaign of dueCampaigns) {
             try {
                 const isWhatsapp = campaign.channel === "WHATSAPP";
+
+                // Same preflight the manual send route runs. Without it a
+                // disconnected workspace or a stale template turns into N
+                // individually-failing jobs and N FAILED recipients, with the
+                // real cause visible only in worker logs.
+                if (isWhatsapp) {
+                    const blocker = await whatsappBlocker(campaign);
+                    if (blocker) {
+                        // Left SCHEDULED on purpose: the next run picks it up
+                        // once the workspace reconnects, instead of burning the
+                        // recipient list on a send that cannot work.
+                        console.warn(`[CRON] Holding campaign ${campaign._id} (${campaign.name}): ${blocker}`);
+                        skipped++;
+                        continue;
+                    }
+                }
 
                 const contacts = await Contact.find({
                     listId: campaign.recipientListId,
                     status: "ACTIVE",
                 });
 
-                let eligibleContacts = contacts;
-                if (isWhatsapp) {
-                    eligibleContacts = contacts.filter((c) => c.whatsappNumber && c.whatsappOptIn);
-                }
+                // Contacts can be reachable on one channel only, so filter to
+                // the channel this campaign actually sends on.
+                const eligibleContacts = isWhatsapp
+                    ? contacts.filter((c) => c.whatsappNumber && c.whatsappOptIn)
+                    : contacts.filter((c) => c.email);
 
                 if (eligibleContacts.length === 0) {
                     // No eligible contacts — mark as SENT with 0 recipients
@@ -79,8 +122,9 @@ export async function GET(req: NextRequest) {
                         return addEmailJob({
                             campaignId: campaign._id.toString(),
                             contactId: contact._id.toString(),
-                            recipientEmail: contact.email,
+                            recipientEmail: contact.email!,
                             recipientName: contact.firstName,
+                            recipientLastName: contact.lastName,
                         });
                     }
                 });
@@ -98,6 +142,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
             dispatched: totalDispatched,
             campaignsProcessed: dueCampaigns.length,
+            // Still SCHEDULED, waiting on a fixable configuration problem.
+            held: skipped,
         });
     } catch (error) {
         console.error("[CRON_DISPATCH_SCHEDULED]", error);

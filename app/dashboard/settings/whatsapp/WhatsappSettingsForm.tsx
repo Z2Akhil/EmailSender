@@ -23,6 +23,7 @@ export default function WhatsappSettingsForm({
 }: Props) {
     const [step, setStep] = useState(initialStep || "connect");
     const [isLoading, setIsLoading] = useState(false);
+    const [isDisconnecting, setIsDisconnecting] = useState(false);
     const [statusMatch, setStatusMatch] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
     useEffect(() => {
@@ -42,6 +43,27 @@ export default function WhatsappSettingsForm({
             setStatusMatch({ type: "error", message: errorMessages[oauthError] || "An unknown error occurred during Meta authentication." });
         }
     }, [oauthSuccess, oauthError]);
+
+    async function onDisconnect() {
+        if (!confirm(
+            "Disconnect this Meta account?\n\n" +
+            "WhatsApp campaigns will stop sending until you connect again. Your synced templates are kept, " +
+            "and contacts are not affected."
+        )) return;
+
+        setIsDisconnecting(true);
+        setStatusMatch(null);
+        try {
+            const res = await fetch("/api/whatsapp/auth", { method: "DELETE" });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || "Failed to disconnect");
+            // Reload so the server component re-renders the disconnected state.
+            window.location.href = "/dashboard/settings/whatsapp";
+        } catch (error: any) {
+            setStatusMatch({ type: "error", message: error.message || "Failed to disconnect" });
+            setIsDisconnecting(false);
+        }
+    }
 
     async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -66,6 +88,8 @@ export default function WhatsappSettingsForm({
 
             if (res.ok) {
                 setStatusMatch({ type: "success", message: "WhatsApp credentials saved successfully" });
+                // Reload so the connected summary above shows the new ids.
+                setTimeout(() => window.location.href = "/dashboard/settings/whatsapp", 1200);
             } else {
                 setStatusMatch({ type: "error", message: result.error || "Failed to save credentials" });
             }
@@ -78,10 +102,47 @@ export default function WhatsappSettingsForm({
 
     return (
         <form onSubmit={onSubmit} className="space-y-6">
-            {isConfigured && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2">
-                    <span className="w-2 h-2 bg-green-500 rounded-full" />
-                    WhatsApp integration is currently active
+            {/* Connected state: the account can be swapped (re-run OAuth) or
+                dropped entirely — the manual form below still edits the ids. */}
+            {isConfigured && step !== "select_asset" && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-4">
+                    <div className="flex items-center gap-2 text-green-700 text-sm font-medium">
+                        <span className="w-2 h-2 bg-green-500 rounded-full" />
+                        WhatsApp integration is currently active
+                    </div>
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <dt className="text-green-800/60 font-medium">Phone Number ID</dt>
+                            <dd className="font-mono text-green-900 truncate">{initialPhoneNumberId || "—"}</dd>
+                        </div>
+                        <div>
+                            <dt className="text-green-800/60 font-medium">Business Account ID</dt>
+                            <dd className="font-mono text-green-900 truncate">{initialBusinessAccountId || "—"}</dd>
+                        </div>
+                    </dl>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                            type="button"
+                            disabled={isLoading || isDisconnecting}
+                            onClick={() => {
+                                setIsLoading(true);
+                                window.location.href = "/api/whatsapp/oauth/login";
+                            }}
+                            className="inline-flex items-center gap-2 bg-white border border-green-300 text-green-800 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-100 disabled:opacity-60 transition-colors"
+                        >
+                            {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                            Change account
+                        </button>
+                        <button
+                            type="button"
+                            disabled={isDisconnecting || isLoading}
+                            onClick={onDisconnect}
+                            className="inline-flex items-center gap-2 bg-white border border-red-200 text-red-600 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-50 disabled:opacity-60 transition-colors"
+                        >
+                            {isDisconnecting && <Loader2 className="w-4 h-4 animate-spin" />}
+                            {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -191,7 +252,7 @@ export default function WhatsappSettingsForm({
                             className="w-full sm:w-auto bg-gray-900 text-white px-5 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed mt-6"
                         >
                             {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                            {isLoading ? "Saving..." : "Save Manual Configuration"}
+                            {isLoading ? "Saving..." : isConfigured ? "Update Configuration" : "Save Manual Configuration"}
                         </button>
                     </details>
                 </>

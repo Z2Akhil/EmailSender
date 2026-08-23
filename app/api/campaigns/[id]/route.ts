@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
 import { ContactList } from "@/models/Contact";
-import { isSharedSendingEnabled, getSharedFromEmail } from "@/lib/shared-sending";
 import { z } from "zod";
 
 // Empty strings are allowed on channel-dependent fields: the campaign form
@@ -17,13 +16,12 @@ const campaignUpdateSchema = z.object({
     fromName: z.string().optional(),
     fromEmail: z.string().email().optional().or(z.literal("")),
     replyTo: z.string().email().optional().or(z.literal("")),
-    provider: z.enum(["SES", "SMTP", "SHARED", "WHATSAPP"]).optional(),
+    provider: z.enum(["SMTP", "WHATSAPP"]).optional(),
     templateId: z.string().optional(),
     htmlContent: z.string().optional(),
     emailDesign: z.any().optional(),
     textContent: z.string().optional(),
     recipientListId: z.string().optional(),
-    domainId: z.string().optional().or(z.literal("")),
     status: z.enum(["DRAFT", "SCHEDULED", "SENDING", "SENT", "CANCELLED"]).optional(),
     scheduledAt: z.string().datetime().nullable().optional(),
 });
@@ -73,30 +71,10 @@ export async function PATCH(
 
         await connectDB();
 
-        // Handle empty string for domainId by unsetting it
-        if (validated.domainId === "") {
-            delete validated.domainId;
-            // Explicitly unset it in DB if they are removing the domain
-            (validated as any).$unset = { domainId: "" };
-        }
         // Empty ObjectId strings would throw CastErrors on save
         if (validated.templateId === "") delete validated.templateId;
         if (validated.recipientListId === "") delete validated.recipientListId;
 
-        // Shared zero-setup sending: platform identity is authoritative
-        // (covers drafts flipped from Advanced to Simple mode)
-        if (validated.provider === "SHARED") {
-            if (!isSharedSendingEnabled()) {
-                return NextResponse.json(
-                    { success: false, error: "Shared sending is not available on this server" },
-                    { status: 400 }
-                );
-            }
-            validated.fromEmail = getSharedFromEmail()!;
-            validated.replyTo = validated.replyTo || session.user.email || "";
-            delete validated.domainId;
-            (validated as any).$unset = { ...(validated as any).$unset, domainId: "" };
-        }
 
         // If recipient list changed, update the total recipients count
         if (validated.recipientListId) {

@@ -51,10 +51,10 @@ export async function GET(req: NextRequest) {
             .limit(5);
 
         // 7. Setup checklist state for the dashboard widget
-        const [workspace, domainCount] = await Promise.all([
+        const [workspace, authenticatedDomains] = await Promise.all([
             Workspace.findById(workspaceId)
-                .select("whatsappAccessToken whatsappPhoneNumberId checklistDismissedAt"),
-            Domain.countDocuments({ workspaceId }),
+                .select("whatsappAccessToken whatsappPhoneNumberId smtpHost checklistDismissedAt"),
+            Domain.countDocuments({ workspaceId, verificationStatus: "VERIFIED" }),
         ]);
 
         return NextResponse.json({
@@ -71,7 +71,9 @@ export async function GET(req: NextRequest) {
                 checklist: {
                     hasContacts: totalContacts > 0,
                     hasSentCampaign: totalCampaigns > 0,
-                    hasCustomDomain: domainCount > 0,
+                    // Sending is impossible without SMTP, so it leads the checklist.
+                    smtpConnected: !!workspace?.smtpHost,
+                    hasCustomDomain: authenticatedDomains > 0,
                     whatsappConnected: !!(workspace?.whatsappAccessToken && workspace?.whatsappPhoneNumberId),
                     dismissed: !!workspace?.checklistDismissedAt,
                 },

@@ -27,9 +27,9 @@ export default function SettingsPage() {
                         <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                             <SettingsIcon className="w-6 h-6 text-amber-600" />
                         </div>
-                        <h2 className="text-lg font-semibold text-gray-900 mb-1">Sending Domains</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-1">Email Authentication</h2>
                         <p className="text-gray-500 text-sm">
-                            Authenticate and manage your sending domains with SES.
+                            Check SPF, DKIM and DMARC so your campaigns reach the inbox.
                         </p>
                     </div>
                 </Link>
@@ -41,7 +41,7 @@ export default function SettingsPage() {
                         </div>
                         <h2 className="text-lg font-semibold text-gray-900 mb-1">SMTP Settings</h2>
                         <p className="text-gray-500 text-sm">
-                            Configure custom SMTP servers for email delivery.
+                            Connect the email account campaigns are sent from.
                         </p>
                     </div>
                 </Link>

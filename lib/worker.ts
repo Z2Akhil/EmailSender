@@ -3,20 +3,20 @@ import { getRedisConnection } from "./redis";
 import { connectDB } from "./db";
 import { Campaign, CampaignRecipient } from "@/models/Campaign";
 import { Contact } from "@/models/Contact";
-import Domain from "@/models/Domain";
 import { Workspace } from "@/models/Workspace";
 import { Template } from "@/models/Template";
 import { sendEmail, injectComplianceFooter } from "./email-service";
-import { composeSharedSender } from "./shared-sending";
 import { sendWhatsappMessage, buildTemplateComponents } from "./whatsapp-service";
 import { decrypt, signTrackingUrl } from "./crypto";
+import { applyPersonalization } from "./personalize";
+import { getTrackingContext, buildUnsubscribeUrl } from "./tracking";
 import mongoose from "mongoose";
 
 export const initWorker = () => {
     const worker = new Worker(
         "email-queue",
         async (job: Job) => {
-            const { campaignId, contactId, recipientEmail, recipientName } = job.data;
+            const { campaignId, contactId, recipientEmail, recipientName, recipientLastName } = job.data;
 
             try {
                 await connectDB();
@@ -31,15 +31,7 @@ export const initWorker = () => {
                     return { skipped: true, reason: "Campaign cancelled" };
                 }
 
-                // 2. Verify Domain Status (if applicable)
-                if (campaign.domainId) {
-                    const domain = await Domain.findById(campaign.domainId);
-                    if (!domain || domain.verificationStatus !== "VERIFIED") {
-                        throw new Error(`Sending domain ${domain?.domainName || campaign.domainId} is not verified`);
-                    }
-                }
-
-                // 3. Sync/Create Recipient Status early to get ID
+                // 2. Sync/Create Recipient Status early to get ID
                 const recipientStatus = await CampaignRecipient.findOneAndUpdate(
                     { campaignId, contactId },
                     {
@@ -52,80 +44,92 @@ export const initWorker = () => {
 
                 const recipientId = recipientStatus._id.toString();
 
-                // 4. Prepare Content (Simple Variable Replacement)
-                let html = campaign.htmlContent;
-                html = html.replace(/{{firstName}}/g, recipientName || "there");
-                html = html.replace(/{{email}}/g, recipientEmail);
-
-                // 5. Inject Open Tracking Pixel
-                const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://scoreit.in";
-                const openTrackingUrl = `${baseUrl}/api/track/open/${recipientId}`;
-                html = html.replace("</body>", `<img src="${openTrackingUrl}" width="1" height="1" style="display:none;" /></body>`);
-                if (!html.includes("</body>")) {
-                    html += `<img src="${openTrackingUrl}" width="1" height="1" style="display:none;" />`;
-                }
-
-                // 6. Inject Click Tracking (Wrap all links)
-                const clickTrackingBaseUrl = `${baseUrl}/api/track/click`;
-                html = html.replace(/href="([^"]*)"/g, (match, url) => {
-                    // Skip unsubscribe links (they have their own tracking logic usually, or should be direct)
-                    if (url.includes("/unsubscribe")) {
-                        return match;
-                    }
-
-                    const signature = signTrackingUrl(recipientId, url);
-                    const trackedUrl = `${clickTrackingBaseUrl}?r=${recipientId}&u=${encodeURIComponent(url)}&s=${signature}`;
-                    return match.replace(url, trackedUrl);
+                // 3. Merge tags — {{fullName}} / {{firstName}} / {{lastName}} / {{email}}
+                let html = applyPersonalization(campaign.htmlContent, {
+                    firstName: recipientName,
+                    lastName: recipientLastName,
+                    email: recipientEmail,
                 });
 
-                // 7. Inject Compliance Footer
-                const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}&cid=${campaignId}`;
+                // 4. Tracking — only when the app has a publicly reachable URL.
+                // Embedding http://localhost links ships a broken pixel, dead
+                // links and a dead unsubscribe, which is what gets a message
+                // filtered as spam regardless of how clean the copy is.
+                const { baseUrl, enabled: trackingEnabled } = getTrackingContext();
+                if (!trackingEnabled) {
+                    console.warn(
+                        "[worker] NEXT_PUBLIC_APP_URL is not a public URL — sending without open/click tracking. " +
+                        "Set it to your deployed https:// origin to enable tracking."
+                    );
+                }
+
+                if (trackingEnabled) {
+                    const openTrackingUrl = `${baseUrl}/api/track/open/${recipientId}`;
+                    html = html.replace("</body>", `<img src="${openTrackingUrl}" width="1" height="1" style="display:none;" /></body>`);
+                    if (!html.includes("</body>")) {
+                        html += `<img src="${openTrackingUrl}" width="1" height="1" style="display:none;" />`;
+                    }
+
+                    // 5. Inject Click Tracking (Wrap all links)
+                    const clickTrackingBaseUrl = `${baseUrl}/api/track/click`;
+                    html = html.replace(/href="([^"]*)"/g, (match, url) => {
+                        // Unsubscribe must stay a direct link — it has its own handler.
+                        if (url.includes("/unsubscribe") || url.startsWith("mailto:")) {
+                            return match;
+                        }
+
+                        const signature = signTrackingUrl(recipientId, url);
+                        const trackedUrl = `${clickTrackingBaseUrl}?r=${recipientId}&u=${encodeURIComponent(url)}&s=${signature}`;
+                        return match.replace(url, trackedUrl);
+                    });
+                }
+
+                // 6. Inject Compliance Footer
+                const unsubscribeUrl = buildUnsubscribeUrl(
+                    baseUrl,
+                    recipientEmail,
+                    campaignId,
+                    campaign.replyTo || campaign.fromEmail
+                );
                 html = injectComplianceFooter(html, unsubscribeUrl);
 
-                // 8. Fetch Workspace for SMTP settings
+                // 7. Resolve the workspace's SMTP account — the only send path.
                 const workspace = await Workspace.findById(campaign.workspaceId);
-
-                let smtpConfig;
-                // Route via SMTP if explicitly selected or if legacy campaign has no SES domain
-                const useSmtp = campaign.provider === "SMTP" || (!campaign.provider && !campaign.domainId);
-                if (useSmtp && workspace?.smtpHost && workspace?.smtpPass) {
-                    try {
-                        const decryptedPass = decrypt(workspace.smtpPass);
-                        smtpConfig = {
-                            host: workspace.smtpHost,
-                            port: workspace.smtpPort || 587,
-                            user: workspace.smtpUser || "",
-                            pass: decryptedPass,
-                            secure: workspace.smtpSecure ?? true,
-                        };
-                    } catch (err) {
-                        console.error(`Failed to decrypt SMTP password for workspace ${campaign.workspaceId}:`, err);
-                    }
+                if (!workspace?.smtpHost || !workspace?.smtpPass) {
+                    throw new Error(
+                        `Workspace ${campaign.workspaceId} has no SMTP server configured — add one in Settings → SMTP`
+                    );
                 }
 
-                // 9. Send Email — shared campaigns re-resolve the platform
-                // identity from env at send time (stored fromEmail may be stale)
-                let fromName = campaign.fromName;
-                let fromEmail = campaign.fromEmail;
-                let replyTo = campaign.replyTo;
-                if (campaign.provider === "SHARED") {
-                    if (!process.env.SHARED_FROM_EMAIL) {
-                        throw new Error("SHARED_FROM_EMAIL not configured in worker environment");
-                    }
-                    ({ fromName, fromEmail } = composeSharedSender(campaign.fromName));
+                let smtpPass: string;
+                try {
+                    smtpPass = decrypt(workspace.smtpPass);
+                } catch (err) {
+                    console.error(`Failed to decrypt SMTP password for workspace ${campaign.workspaceId}:`, err);
+                    throw new Error("Stored SMTP password could not be decrypted — re-save it in Settings → SMTP");
                 }
 
+                const smtpConfig = {
+                    host: workspace.smtpHost,
+                    port: workspace.smtpPort || 587,
+                    user: workspace.smtpUser || "",
+                    pass: smtpPass,
+                    secure: workspace.smtpSecure ?? true,
+                };
+
+                // 8. Send
                 const result = await sendEmail({
                     to: recipientEmail,
                     subject: campaign.subject,
                     html: html,
-                    fromName,
-                    fromEmail,
-                    replyTo,
+                    fromName: campaign.fromName,
+                    fromEmail: campaign.fromEmail,
+                    replyTo: campaign.replyTo,
+                    unsubscribeUrl,
                     smtpConfig,
                 });
 
-                // 10. Update Statuses
+                // 9. Update Statuses
                 await CampaignRecipient.findByIdAndUpdate(recipientId, {
                     status: "DELIVERED",
                     updatedAt: new Date()

@@ -6,7 +6,7 @@ import { Campaign } from "@/models/Campaign";
 import { Contact } from "@/models/Contact";
 import { Workspace } from "@/models/Workspace";
 import { Template } from "@/models/Template";
-import { isSharedSendingEnabled } from "@/lib/shared-sending";
+import { getWorkspaceSmtpConfig } from "@/lib/workspace-smtp";
 import { addEmailJob, addWhatsappJob } from "@/lib/queue";
 import { checkPlanLimits } from "@/lib/stripe";
 import { strictRateLimit } from "@/lib/ratelimit";
@@ -125,20 +125,22 @@ export async function POST(
 
         // --- Email Campaign ---
 
-        // Shared zero-setup sending pre-checks: fail fast before enqueueing
-        if (campaign.provider === "SHARED") {
-            if (!isSharedSendingEnabled()) {
-                return NextResponse.json({
-                    success: false,
-                    error: "Shared sending is not configured on this server. Use your own domain or SMTP instead.",
-                }, { status: 400 });
-            }
-            if (!campaign.replyTo) {
-                return NextResponse.json({
-                    success: false,
-                    error: "Shared campaigns require a reply-to email so recipients can reach you.",
-                }, { status: 400 });
-            }
+        // Contacts imported for WhatsApp only have no email address.
+        const emailContacts = contacts.filter((c) => c.email);
+        if (emailContacts.length === 0) {
+            return NextResponse.json({
+                success: false,
+                error: "No contacts in this list have an email address. Import contacts with an Email column, or switch this campaign to WhatsApp.",
+            }, { status: 400 });
+        }
+
+        // Fail fast on configuration instead of enqueueing jobs that all fail
+        // one by one inside the worker.
+        if (!(await getWorkspaceSmtpConfig(session.user.workspaceId))) {
+            return NextResponse.json({
+                success: false,
+                error: "No SMTP server is configured. Connect your email account in Settings → SMTP first.",
+            }, { status: 400 });
         }
 
         // Check Plan Limits (Email Volume)
@@ -153,17 +155,18 @@ export async function POST(
 
         // 3. Update Campaign Status
         campaign.status = "SENDING";
-        campaign.totalRecipients = contacts.length;
+        campaign.totalRecipients = emailContacts.length;
         campaign.sentAt = new Date();
         await campaign.save();
 
         // 4. Dispatch Email Jobs
-        const jobPromises = contacts.map((contact) =>
+        const jobPromises = emailContacts.map((contact) =>
             addEmailJob({
                 campaignId: campaign._id.toString(),
                 contactId: contact._id.toString(),
-                recipientEmail: contact.email,
+                recipientEmail: contact.email!,
                 recipientName: contact.firstName,
+                recipientLastName: contact.lastName,
             })
         );
 
@@ -171,8 +174,8 @@ export async function POST(
 
         return NextResponse.json({
             success: true,
-            message: `Dispatched ${contacts.length} emails to queue`,
-            totalRecipients: contacts.length
+            message: `Dispatched ${emailContacts.length} emails to queue`,
+            totalRecipients: emailContacts.length
         });
     } catch (error) {
         console.error("[CAMPAIGN_SEND]", error);

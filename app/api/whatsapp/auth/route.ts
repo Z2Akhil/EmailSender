@@ -6,8 +6,10 @@ import { Workspace } from "@/models/Workspace";
 import { encrypt } from "@/lib/crypto";
 import { z } from "zod";
 
+// The token is optional on update: an already-connected workspace can change
+// the phone / business ids while keeping the stored token.
 const schema = z.object({
-    whatsappAccessToken: z.string().min(1, "Access Token is required"),
+    whatsappAccessToken: z.string().optional(),
     whatsappPhoneNumberId: z.string().min(1, "Phone Number ID is required"),
     whatsappBusinessAccountId: z.string().min(1, "Business Account ID is required"),
 });
@@ -36,6 +38,38 @@ export async function GET() {
     }
 }
 
+/**
+ * DELETE /api/whatsapp/auth
+ * Disconnects the Meta account: drops the access token and the phone/WABA ids
+ * from the workspace. Synced templates are left alone — reconnecting the same
+ * account makes them usable again; a different account should re-sync.
+ * WhatsApp campaigns stop sending immediately (the worker checks the token).
+ */
+export async function DELETE() {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session?.user?.workspaceId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        await connectDB();
+        const workspace = await Workspace.findByIdAndUpdate(
+            session.user.workspaceId,
+            { $unset: { whatsappAccessToken: "", whatsappPhoneNumberId: "", whatsappBusinessAccountId: "" } },
+            { new: true }
+        );
+
+        if (!workspace) {
+            return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+        }
+
+        return NextResponse.json({ message: "WhatsApp account disconnected" });
+    } catch (error) {
+        console.error("WhatsApp disconnect error:", error);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
+}
+
 export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions);
@@ -53,14 +87,22 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "No workspace found" }, { status: 400 });
         }
 
-        // Encrypt the token before saving
-        const encryptedToken = encrypt(whatsappAccessToken);
-
-        await Workspace.findByIdAndUpdate(workspaceId, {
-            whatsappAccessToken: encryptedToken,
+        const update: Record<string, string> = {
             whatsappPhoneNumberId,
             whatsappBusinessAccountId,
-        });
+        };
+
+        if (whatsappAccessToken?.trim()) {
+            update.whatsappAccessToken = encrypt(whatsappAccessToken.trim());
+        } else {
+            // Blank means "keep the current token" — only valid if one exists.
+            const existing = await Workspace.findById(workspaceId).select("whatsappAccessToken");
+            if (!existing?.whatsappAccessToken) {
+                return NextResponse.json({ error: "Access Token is required" }, { status: 400 });
+            }
+        }
+
+        await Workspace.findByIdAndUpdate(workspaceId, update);
 
         return NextResponse.json({ message: "WhatsApp credentials saved successfully" }, { status: 200 });
 

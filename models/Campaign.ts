@@ -15,8 +15,7 @@ export interface ICampaign extends Document {
     sentAt?: Date;
     workspaceId: mongoose.Types.ObjectId;
     channel: "EMAIL" | "WHATSAPP";
-    provider?: "SES" | "SMTP" | "SHARED" | "WHATSAPP";
-    domainId?: mongoose.Types.ObjectId;
+    provider?: "SMTP" | "WHATSAPP";
     templateId?: mongoose.Types.ObjectId;
     recipientListId?: mongoose.Types.ObjectId;
     totalRecipients: number;
@@ -74,9 +73,7 @@ const CampaignSchema = new Schema<ICampaign>(
         sentAt: { type: Date },
         workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
         channel: { type: String, enum: ["EMAIL", "WHATSAPP"], default: "EMAIL" },
-        // SHARED = zero-setup sending via the platform's SES identity
-        provider: { type: String, enum: ["SES", "SMTP", "SHARED", "WHATSAPP"], default: "SES" },
-        domainId: { type: Schema.Types.ObjectId, ref: "Domain" },
+        provider: { type: String, enum: ["SMTP", "WHATSAPP"], default: "SMTP" },
         templateId: { type: Schema.Types.ObjectId, ref: "Template" },
         recipientListId: { type: Schema.Types.ObjectId, ref: "ContactList" },
         totalRecipients: { type: Number, default: 0 },
@@ -97,7 +94,6 @@ const CampaignSchema = new Schema<ICampaign>(
 CampaignSchema.index({ workspaceId: 1, status: 1 });
 CampaignSchema.index({ workspaceId: 1, createdAt: -1 });
 CampaignSchema.index({ workspaceId: 1, recipientListId: 1 });
-CampaignSchema.index({ domainId: 1 });
 
 const CampaignRecipientSchema = new Schema<ICampaignRecipient>(
     {

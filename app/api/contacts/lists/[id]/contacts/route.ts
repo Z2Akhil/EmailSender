@@ -5,6 +5,8 @@ import { connectDB } from "@/lib/db";
 import { ContactList, Contact } from "@/models/Contact";
 import mongoose from "mongoose";
 import { checkPlanLimits } from "@/lib/stripe";
+import { joinFullName, normalizeEmail, normalizePhone, splitFullName } from "@/lib/contact-import";
+import type { CountryCode } from "libphonenumber-js";
 
 // GET /api/contacts/lists/[id]/contacts
 // Query params: page, limit, search, status
@@ -49,7 +51,8 @@ export async function GET(
                 { email: { $regex: search, $options: "i" } },
                 { firstName: { $regex: search, $options: "i" } },
                 { lastName: { $regex: search, $options: "i" } },
-                { company: { $regex: search, $options: "i" } },
+                { whatsappNumber: { $regex: search, $options: "i" } },
+                { phone: { $regex: search, $options: "i" } },
             ];
         }
 
@@ -62,12 +65,13 @@ export async function GET(
 
         const formatted = contacts.map((c) => ({
             id: c._id.toString(),
-            email: c.email,
+            email: c.email ?? null,
             firstName: c.firstName ?? null,
             lastName: c.lastName ?? null,
-            company: c.company ?? null,
+            fullName: joinFullName(c) || null,
             phone: c.phone ?? null,
             whatsappNumber: c.whatsappNumber ?? null,
+            whatsappOptIn: !!c.whatsappOptIn,
             listId: c.listId.toString(),
             status: c.status,
             createdAt: c.createdAt,
@@ -92,7 +96,9 @@ export async function GET(
 }
 
 // POST /api/contacts/lists/[id]/contacts
-// Body: { email, firstName?, lastName?, company?, phone?, whatsappNumber? }
+// Body: { fullName?, email?, phone?, whatsappNumber?, defaultCountry? }
+// Same four fields as the importer. At least one of email / whatsappNumber is
+// required.
 export async function POST(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -119,21 +125,43 @@ export async function POST(
         }
 
         const body = await req.json();
-        const { email, firstName, lastName, company, phone, whatsappNumber } = body;
+        const { fullName, phone, whatsappNumber, defaultCountry } = body;
 
-        if (!email || typeof email !== "string") {
-            return NextResponse.json({ success: false, error: "Email is required" }, { status: 400 });
+        // Same canonical shape the CSV importer produces — a contact is valid
+        // with an email, a WhatsApp number, or both.
+        const { email, error: emailError } = normalizeEmail(body.email);
+        if (emailError) {
+            return NextResponse.json({ success: false, error: emailError }, { status: 400 });
         }
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email.trim())) {
-            return NextResponse.json({ success: false, error: "Invalid email format" }, { status: 400 });
+        const country = typeof defaultCountry === "string" ? (defaultCountry.toUpperCase() as CountryCode) : undefined;
+        const whatsapp = normalizePhone(whatsappNumber, country);
+        if (whatsapp.error) {
+            return NextResponse.json({ success: false, error: whatsapp.error }, { status: 400 });
         }
 
-        // Check for duplicate
-        const existing = await Contact.findOne({ email: email.trim().toLowerCase(), listId: id });
+        if (!email && !whatsapp.digits) {
+            return NextResponse.json({
+                success: false,
+                error: "Enter an email address or a WhatsApp number — a contact needs at least one.",
+            }, { status: 400 });
+        }
+
+        // Check for duplicate on either identifier
+        const existing = await Contact.findOne({
+            listId: id,
+            $or: [
+                ...(email ? [{ email }] : []),
+                ...(whatsapp.digits ? [{ whatsappNumber: whatsapp.digits }] : []),
+            ],
+        });
         if (existing) {
-            return NextResponse.json({ success: false, error: "Contact with this email already exists in this list" }, { status: 409 });
+            return NextResponse.json({
+                success: false,
+                error: existing.email === email
+                    ? "A contact with this email already exists in this list"
+                    : "A contact with this WhatsApp number already exists in this list",
+            }, { status: 409 });
         }
 
         // Check Plan Limits
@@ -146,18 +174,19 @@ export async function POST(
             }, { status: 403 });
         }
 
-        const sanitizedWhatsapp = whatsappNumber?.replace(/[^0-9]/g, "") || undefined;
+        const normalizedPhone = normalizePhone(phone, country);
+        // Stored split so `{{firstName}}` personalization keeps working.
+        const { firstName, lastName } = splitFullName(typeof fullName === "string" ? fullName : undefined);
 
         const contact = await Contact.create({
-            email: email.trim().toLowerCase(),
-            firstName: firstName?.trim() || undefined,
-            lastName: lastName?.trim() || undefined,
-            company: company?.trim() || undefined,
-            phone: phone?.trim() || undefined,
-            whatsappNumber: sanitizedWhatsapp,
+            email,
+            firstName,
+            lastName,
+            phone: normalizedPhone.e164 || phone?.trim() || undefined,
+            whatsappNumber: whatsapp.digits,
             // Providing a WhatsApp number implies the list owner asserts the
             // contact consented — without this flag every send skips them
-            whatsappOptIn: !!sanitizedWhatsapp,
+            whatsappOptIn: !!whatsapp.digits,
             listId: id,
             workspaceId: session.user.workspaceId,
             status: "ACTIVE",
@@ -170,12 +199,13 @@ export async function POST(
             success: true,
             data: {
                 id: contact._id.toString(),
-                email: contact.email,
+                email: contact.email ?? null,
                 firstName: contact.firstName ?? null,
                 lastName: contact.lastName ?? null,
-                company: contact.company ?? null,
+                fullName: joinFullName(contact) || null,
                 phone: contact.phone ?? null,
                 whatsappNumber: contact.whatsappNumber ?? null,
+                whatsappOptIn: !!contact.whatsappOptIn,
                 listId: contact.listId.toString(),
                 status: contact.status,
                 createdAt: contact.createdAt,

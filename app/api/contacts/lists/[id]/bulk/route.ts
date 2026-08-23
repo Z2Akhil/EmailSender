@@ -5,11 +5,12 @@ import { Contact, ContactList } from "@/models/Contact";
 import { checkPlanLimits } from "@/lib/stripe";
 import mongoose from "mongoose";
 import { z } from "zod";
+import { splitFullName } from "@/lib/contact-import";
 
 const bulkSchema = z.object({
     contacts: z.array(z.object({
         email: z.string(),
-        firstName: z.string().optional(),
+        fullName: z.string().optional(),
     })).min(1).max(500),
 });
 
@@ -46,14 +47,14 @@ export async function POST(
 
         // Normalize + validate + dedupe within the payload
         const seen = new Set<string>();
-        const candidates: { email: string; firstName?: string }[] = [];
+        const candidates: { email: string; firstName?: string; lastName?: string }[] = [];
         let invalid = 0;
         for (const c of contacts) {
             const email = c.email.trim().toLowerCase();
             if (!EMAIL_RE.test(email)) { invalid++; continue; }
             if (seen.has(email)) continue;
             seen.add(email);
-            candidates.push({ email, firstName: c.firstName?.trim() || undefined });
+            candidates.push({ email, ...splitFullName(c.fullName) });
         }
 
         // Drop emails already in this list
@@ -77,6 +78,7 @@ export async function POST(
                 toInsert.map(c => ({
                     email: c.email,
                     firstName: c.firstName,
+                    lastName: c.lastName,
                     listId: id,
                     workspaceId: session.user.workspaceId,
                     status: "ACTIVE",

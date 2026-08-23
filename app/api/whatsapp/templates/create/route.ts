@@ -21,6 +21,12 @@ const buttonSchema = z.discriminatedUnion("type", [
         text: z.string().min(1).max(25),
         phone_number: z.string().min(5).max(20),
     }),
+    z.object({
+        type: z.literal("COPY_CODE"),
+        // Sample offer code shown to Meta's reviewers; the worker sends it
+        // as the coupon_code parameter at send time
+        example: z.string().min(1).max(15),
+    }),
 ]);
 
 const createTemplateSchema = z.object({
@@ -33,7 +39,7 @@ const createTemplateSchema = z.object({
     headerText: z.string().max(60).optional(),
     bodyText: z.string().min(1, "Message body is required").max(1024),
     footerText: z.string().max(60).optional(),
-    buttons: z.array(buttonSchema).max(3).optional(),
+    buttons: z.array(buttonSchema).max(10).optional(),
     // Example values for {{n}} placeholders, in order — Meta requires them for review
     bodyExamples: z.array(z.string().min(1)).optional(),
     headerExample: z.string().optional(),
@@ -116,7 +122,32 @@ export async function POST(req: Request) {
         }
 
         if (data.buttons && data.buttons.length > 0) {
-            components.push({ type: "BUTTONS", buttons: data.buttons });
+            // Meta's per-type limits: 2 website, 1 call, 1 copy-code, 10 total
+            const counts = data.buttons.reduce<Record<string, number>>((acc, b) => {
+                acc[b.type] = (acc[b.type] || 0) + 1;
+                return acc;
+            }, {});
+            if ((counts.URL || 0) > 2) {
+                return NextResponse.json({ error: "At most 2 website buttons are allowed" }, { status: 400 });
+            }
+            if ((counts.PHONE_NUMBER || 0) > 1) {
+                return NextResponse.json({ error: "At most 1 call button is allowed" }, { status: 400 });
+            }
+            if ((counts.COPY_CODE || 0) > 1) {
+                return NextResponse.json({ error: "At most 1 copy-code button is allowed" }, { status: 400 });
+            }
+
+            // Meta rejects interleaved kinds — quick replies must be grouped
+            // together and call-to-action buttons together
+            const grouped = [...data.buttons].sort(
+                (a, b) => Number(b.type === "QUICK_REPLY") - Number(a.type === "QUICK_REPLY")
+            );
+            components.push({
+                type: "BUTTONS",
+                buttons: grouped.map(b =>
+                    b.type === "COPY_CODE" ? { type: "COPY_CODE", example: b.example } : b
+                ),
+            });
         }
 
         const token = decrypt(workspace.whatsappAccessToken);

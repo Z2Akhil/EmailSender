@@ -1,14 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Clock, AlertCircle, Copy, RefreshCw, ChevronDown, ChevronUp, Globe, Loader2, Trash2, Info } from "lucide-react";
+import { CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Globe, Loader2, Trash2, Copy } from "lucide-react";
+
+type RecordStatus = "PASS" | "WARN" | "FAIL" | "UNCHECKED";
+
+interface AuthRecord {
+    status: RecordStatus;
+    value?: string;
+    message?: string;
+    fix?: string;
+}
 
 interface Domain {
     _id: string;
     domainName: string;
-    verificationStatus: 'PENDING' | 'VERIFIED' | 'FAILED';
-    verificationToken?: string;
-    dkimTokens?: string[];
+    verificationStatus: "PENDING" | "VERIFIED" | "FAILED";
+    dkimSelector?: string;
+    spf?: AuthRecord;
+    dkim?: AuthRecord;
+    dmarc?: AuthRecord;
+    lastCheckedAt?: string;
     createdAt: string;
 }
 
@@ -17,59 +29,97 @@ interface DomainListProps {
     onRefresh: () => void;
 }
 
+const STATUS_STYLES: Record<RecordStatus, { badge: string; icon: typeof CheckCircle2; label: string }> = {
+    PASS: { badge: "bg-emerald-50 text-emerald-700 border-emerald-100", icon: CheckCircle2, label: "Pass" },
+    WARN: { badge: "bg-amber-50 text-amber-700 border-amber-100", icon: AlertTriangle, label: "Warning" },
+    FAIL: { badge: "bg-red-50 text-red-600 border-red-100", icon: AlertCircle, label: "Missing" },
+    UNCHECKED: { badge: "bg-gray-50 text-gray-500 border-gray-100", icon: AlertCircle, label: "Not checked" },
+};
+
+/** SPF, DKIM and DMARC decide inbox vs spam more than anything in the message. */
+function RecordRow({ name, purpose, record }: { name: string; purpose: string; record?: AuthRecord }) {
+    const status = record?.status || "UNCHECKED";
+    const style = STATUS_STYLES[status];
+    const Icon = style.icon;
+
+    return (
+        <div className="py-4 first:pt-0 last:pb-0 border-b border-gray-50 last:border-0">
+            <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-gray-900">{name}</span>
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${style.badge}`}>
+                            <Icon className="w-3 h-3" />
+                            {style.label}
+                        </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">{purpose}</p>
+                </div>
+            </div>
+
+            {record?.message && <p className="text-xs text-gray-600 mt-2">{record.message}</p>}
+
+            {record?.value && (
+                <pre className="mt-2 text-[11px] font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 overflow-x-auto whitespace-pre-wrap break-all">
+                    {record.value}
+                </pre>
+            )}
+
+            {record?.fix && status !== "PASS" && (
+                <div className="mt-2 flex items-start gap-2 text-xs text-blue-800 bg-blue-50/60 border border-blue-100 rounded-lg px-3 py-2">
+                    <span className="flex-1 break-words">{record.fix}</span>
+                    <button
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText(record.fix!)}
+                        className="shrink-0 text-blue-600 hover:text-blue-800"
+                        title="Copy"
+                    >
+                        <Copy className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export function DomainList({ domains, onRefresh }: DomainListProps) {
-    const [expandedId, setExpandedId] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [selectorDraft, setSelectorDraft] = useState<Record<string, string>>({});
 
-    const toggleExpand = (id: string) => {
-        setExpandedId(expandedId === id ? null : id);
-    };
-
-    const copyToClipboard = (text: string, label: string) => {
-        navigator.clipboard.writeText(text);
-        // Using a simple alert for now, in a real app would use a toast
-        console.log(`${label} copied!`);
-    };
-
-    const verifyStatus = async (id: string) => {
+    const recheck = async (id: string) => {
         setIsRefreshing(id);
         try {
-            const response = await fetch(`/api/domains/${id}/verify`);
+            const selector = selectorDraft[id]?.trim();
+            const url = selector
+                ? `/api/domains/${id}/verify?selector=${encodeURIComponent(selector)}`
+                : `/api/domains/${id}/verify`;
+            const response = await fetch(url);
             const result = await response.json();
-
-            if (result.success) {
-                onRefresh();
-            } else {
-                throw new Error(result.error);
-            }
+            if (!result.success) throw new Error(result.error);
+            onRefresh();
         } catch (error) {
             console.error(error);
+            alert("Could not check DNS for this domain.");
         } finally {
             setIsRefreshing(null);
         }
     };
 
     const handleDelete = async (id: string, domainName: string) => {
-        if (!confirm(`Are you sure you want to remove ${domainName}? This cannot be undone.`)) {
+        if (!confirm(`Remove ${domainName} from this list?\n\nThis only stops checking its DNS — it changes nothing about your domain or your email account.`)) {
             return;
         }
 
         setIsDeleting(id);
         try {
-            const response = await fetch(`/api/domains/${id}`, {
-                method: 'DELETE',
-            });
+            const response = await fetch(`/api/domains/${id}`, { method: "DELETE" });
             const result = await response.json();
-
-            if (result.success) {
-                onRefresh();
-            } else {
-                throw new Error(result.error || 'Failed to delete domain');
-            }
+            if (!result.success) throw new Error(result.error || "Failed to remove domain");
+            onRefresh();
         } catch (error) {
             console.error(error);
-            alert("Failed to delete domain.");
+            alert("Failed to remove domain.");
         } finally {
             setIsDeleting(null);
         }
@@ -82,8 +132,9 @@ export function DomainList({ domains, onRefresh }: DomainListProps) {
                     <Globe className="w-6 h-6 text-gray-300" />
                 </div>
                 <h3 className="text-gray-900 font-medium mb-1">No domains added yet</h3>
-                <p className="text-gray-500 text-sm max-w-xs mx-auto mb-6">
-                    Add a sending domain to start sending emails from your own brand.
+                <p className="text-gray-500 text-sm max-w-sm mx-auto">
+                    Add the domain you send from and we&apos;ll check its SPF, DKIM and DMARC records —
+                    the three DNS records that keep your campaigns out of the spam folder.
                 </p>
             </div>
         );
@@ -91,197 +142,96 @@ export function DomainList({ domains, onRefresh }: DomainListProps) {
 
     return (
         <div className="space-y-4">
-            {domains.map((domain) => (
-                <div
-                    key={domain._id}
-                    className={`bg-white rounded-2xl border transition-all overflow-hidden ${expandedId === domain._id ? "border-blue-200 ring-4 ring-blue-50/50" : "border-gray-100 shadow-sm"
-                        }`}
-                >
-                    <div
-                        className="p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50/50 transition-colors"
-                        onClick={() => toggleExpand(domain._id)}
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${domain.verificationStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" :
-                                domain.verificationStatus === "FAILED" ? "bg-red-50 text-red-600" :
-                                    "bg-blue-50 text-blue-600"
-                                }`}>
-                                <Globe className="w-6 h-6" />
+            {domains.map((domain) => {
+                const verified = domain.verificationStatus === "VERIFIED";
+                return (
+                    <div key={domain._id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 border-b border-gray-50">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <Globe className="w-4 h-4 text-gray-400 shrink-0" />
+                                    <span className="font-semibold text-gray-900 truncate">{domain.domainName}</span>
+                                    <span
+                                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${verified
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                            : "bg-amber-50 text-amber-700 border-amber-100"
+                                            }`}
+                                    >
+                                        {verified ? "Authenticated" : "Needs attention"}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    {domain.lastCheckedAt
+                                        ? `Last checked ${new Date(domain.lastCheckedAt).toLocaleString()}`
+                                        : "Not checked yet"}
+                                </p>
                             </div>
-                            <div>
-                                <h3 className="font-bold text-gray-900">{domain.domainName}</h3>
-                                <p className="text-xs text-gray-400 font-medium">Added on {new Date(domain.createdAt).toLocaleDateString()}</p>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                    onClick={() => recheck(domain._id)}
+                                    disabled={isRefreshing === domain._id}
+                                    className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                                >
+                                    {isRefreshing === domain._id
+                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                        : <RefreshCw className="w-4 h-4" />}
+                                    Re-check DNS
+                                </button>
+                                <button
+                                    onClick={() => handleDelete(domain._id, domain.domainName)}
+                                    disabled={isDeleting === domain._id}
+                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl disabled:opacity-60 transition-colors"
+                                    title="Remove domain"
+                                >
+                                    {isDeleting === domain._id
+                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                        : <Trash2 className="w-4 h-4" />}
+                                </button>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-tight ${domain.verificationStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
-                                domain.verificationStatus === "FAILED" ? "bg-red-50 text-red-700 border border-red-100" :
-                                    "bg-amber-50 text-amber-700 border border-amber-100"
-                                }`}>
-                                {domain.verificationStatus === "VERIFIED" ? (
-                                    <><CheckCircle2 className="w-3.5 h-3.5" /> Verified</>
-                                ) : domain.verificationStatus === "FAILED" ? (
-                                    <><AlertCircle className="w-3.5 h-3.5" /> Failed</>
-                                ) : (
-                                    <><Clock className="w-3.5 h-3.5" /> Pending</>
-                                )}
-                            </div>
-                            {expandedId === domain._id ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                        <div className="px-5 py-4">
+                            <RecordRow
+                                name="SPF"
+                                purpose="Lists the servers allowed to send mail as your domain"
+                                record={domain.spf}
+                            />
+                            <RecordRow
+                                name={`DKIM${domain.dkimSelector ? ` (${domain.dkimSelector})` : ""}`}
+                                purpose="Cryptographically signs your mail so it cannot be forged"
+                                record={domain.dkim}
+                            />
+                            <RecordRow
+                                name="DMARC"
+                                purpose="Tells receivers what to do when SPF or DKIM fails"
+                                record={domain.dmarc}
+                            />
                         </div>
+
+                        {/* DKIM selectors are provider-specific and cannot be discovered —
+                            common ones are probed automatically, this covers the rest. */}
+                        {domain.dkim?.status !== "PASS" && (
+                            <div className="px-5 pb-5 flex flex-col sm:flex-row sm:items-center gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="DKIM selector from your provider, e.g. zoho or s1"
+                                    value={selectorDraft[domain._id] ?? domain.dkimSelector ?? ""}
+                                    onChange={(e) => setSelectorDraft({ ...selectorDraft, [domain._id]: e.target.value })}
+                                    className="flex-1 bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                                />
+                                <button
+                                    onClick={() => recheck(domain._id)}
+                                    disabled={isRefreshing === domain._id}
+                                    className="px-4 py-2 text-sm font-semibold text-blue-600 border border-blue-200 rounded-xl hover:bg-blue-50 disabled:opacity-60 transition-colors whitespace-nowrap"
+                                >
+                                    Check this selector
+                                </button>
+                            </div>
+                        )}
                     </div>
-
-                    {expandedId === domain._id && (
-                        <div className="px-5 pb-6 bg-white">
-                            {domain.verificationStatus !== "VERIFIED" ? (
-                                <div className="mt-2 space-y-6">
-                                    <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5">
-                                        <div className="flex items-start gap-4">
-                                            <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center flex-shrink-0">
-                                                <Info className="w-5 h-5 text-blue-600" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm text-blue-900 font-bold mb-1">DNS Records Required</p>
-                                                <p className="text-xs text-blue-700/80 leading-relaxed font-medium">
-                                                    Add these records to your DNS provider (Cloudflare, GoDaddy, etc.) to verify ownership and enable DKIM signing.
-                                                    Full verification requires all records to be active.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-6">
-                                        {/* Identity Record */}
-                                        <div className="space-y-3">
-                                            <div className="flex items-center justify-between px-1">
-                                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Identity Record (TXT)</h4>
-                                                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md">Required</span>
-                                            </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                <div>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Host / Name</p>
-                                                    <div className="flex gap-2">
-                                                        <div className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-mono text-[13px] text-gray-600 truncate">
-                                                            _amazonses
-                                                        </div>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); copyToClipboard(`_amazonses`, "Host"); }}
-                                                            className="p-3 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-all active:scale-95"
-                                                        >
-                                                            <Copy className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Value / Points To</p>
-                                                    <div className="flex gap-2">
-                                                        <div className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-mono text-[13px] text-gray-600 truncate">
-                                                            {domain.verificationToken}
-                                                        </div>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); copyToClipboard(domain.verificationToken || "", "Value"); }}
-                                                            className="p-3 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-all active:scale-95"
-                                                        >
-                                                            <Copy className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* DKIM Records */}
-                                        {domain.dkimTokens && domain.dkimTokens.length > 0 && (
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between px-1">
-                                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">DKIM Records (CNAME)</h4>
-                                                    <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded-md">Recommended</span>
-                                                </div>
-                                                <div className="space-y-3">
-                                                    {domain.dkimTokens.map((token, i) => (
-                                                        <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
-                                                            <div>
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Host</p>
-                                                                <div className="flex gap-2 overflow-hidden">
-                                                                    <div className="flex-1 font-mono text-[12px] text-gray-600 truncate">
-                                                                        {token}._domainkey
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); copyToClipboard(`${token}._domainkey`, "Host"); }}
-                                                                        className="text-gray-400 hover:text-blue-600"
-                                                                    >
-                                                                        <Copy className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Points To</p>
-                                                                <div className="flex gap-2 overflow-hidden">
-                                                                    <div className="flex-1 font-mono text-[12px] text-gray-600 truncate">
-                                                                        {token}.dkim.amazonses.com
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); copyToClipboard(`${token}.dkim.amazonses.com`, "Value"); }}
-                                                                        className="text-gray-400 hover:text-blue-600"
-                                                                    >
-                                                                        <Copy className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="flex items-center justify-between pt-4">
-                                        <p className="text-xs text-gray-400 italic">
-                                            DNS changes can take up to 48 hours to propagate.
-                                        </p>
-                                        <div className="flex items-center gap-3">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleDelete(domain._id, domain.domainName); }}
-                                                disabled={isDeleting === domain._id}
-                                                className="flex items-center gap-2 text-sm text-red-500 hover:text-red-600 font-medium transition-colors disabled:opacity-50"
-                                            >
-                                                {isDeleting === domain._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Remove Domain
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); verifyStatus(domain._id); }}
-                                                disabled={isRefreshing === domain._id || isDeleting === domain._id}
-                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
-                                            >
-                                                {isRefreshing === domain._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                                Verify Now
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="mt-6">
-                                    <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800">
-                                        <CheckCircle2 className="w-5 h-5" />
-                                        <div className="text-sm">
-                                            <p className="font-semibold">Domain Verified</p>
-                                            <p className="text-emerald-700/80">This domain is ready to be used as a sending identity in your campaigns.</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-6 flex justify-end">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(domain._id, domain.domainName); }}
-                                            disabled={isDeleting === domain._id}
-                                            className="flex items-center gap-2 text-sm text-red-500 hover:text-red-600 font-medium transition-colors disabled:opacity-50"
-                                        >
-                                            {isDeleting === domain._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Remove Domain
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }

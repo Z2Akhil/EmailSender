@@ -22,7 +22,7 @@ A multi-tenant bulk email + WhatsApp campaign SaaS: Next.js 16 (App Router, Type
 ### Two processes
 
 1. **Next.js app** — UI + API routes. Campaign send routes do not send email; they validate, set campaign status to `SENDING`, and enqueue one BullMQ job per recipient (`lib/queue.ts`).
-2. **Worker** (`npm run worker` → `start-worker.ts` → `lib/worker.ts`) — separate long-running process that consumes the `email-queue` and `whatsapp-queue` BullMQ queues. Per job it: re-checks campaign/domain status, upserts a `CampaignRecipient`, substitutes `{{firstName}}`/`{{email}}` variables, injects the open-tracking pixel, rewrites all `href`s through `/api/track/click`, appends the compliance/unsubscribe footer, then sends via `lib/email-service.ts`.
+2. **Worker** (`npm run worker` → `start-worker.ts` → `lib/worker.ts`) — separate long-running process that consumes the `email-queue` and `whatsapp-queue` BullMQ queues. Per job it: re-checks campaign status, upserts a `CampaignRecipient`, substitutes `{{firstName}}`/`{{email}}` variables, injects the open-tracking pixel, rewrites all `href`s through `/api/track/click`, appends the compliance/unsubscribe footer, then sends via `lib/email-service.ts`.
 
 Both must be running locally to test end-to-end sending.
 
@@ -40,19 +40,41 @@ Both must be running locally to test end-to-end sending.
 
 Root-level `proxy.ts` is the global middleware: per-IP rate limiting on `/api/*`, NextAuth gating of `/dashboard/*`, and `admin_token` verification for `/admin/*`. API routes are public at the middleware layer — each route enforces auth itself via `requireAuth()`.
 
-### Email provider chain (`lib/email-service.ts`)
+### Email sending is SMTP-only (`lib/email-service.ts`)
 
-Per send: workspace custom SMTP (if configured) → Amazon SES → SendGrid → log-only if nothing is configured. Custom SMTP passwords and WhatsApp access tokens are encrypted at rest with AES-256-GCM (`lib/crypto.ts`, keyed by `ENCRYPTION_KEY` — falls back to an insecure dev key outside production).
+There is no platform email provider — Amazon SES, SendGrid and the "shared sending" mode were removed. Every email goes through the **workspace's own SMTP account** (Settings → SMTP), so mail is sent from the user's real address. `lib/workspace-smtp.ts` (`getWorkspaceSmtpConfig`) is the single loader used by the worker, the test-email route and the send/schedule preflights. SMTP passwords and WhatsApp access tokens are encrypted at rest with AES-256-GCM (`lib/crypto.ts`, keyed by `ENCRYPTION_KEY` — falls back to an insecure dev key outside production).
 
-Campaigns with `provider: "SHARED"` use zero-setup shared sending (`lib/shared-sending.ts`): the platform's SES identity from `SHARED_FROM_EMAIL` (must be set in both app and worker envs), display name composed as `"<brand> via <NEXT_PUBLIC_APP_NAME>"`, Reply-To forced to the user's email. API routes force `fromEmail` server-side; never trust the client's value for it. The campaign form defaults to Simple mode when `GET /api/settings/sending` reports it enabled.
+- No SMTP configured = the send route returns 400 before enqueueing anything; the worker throws rather than silently logging.
+- Transports are pooled per credential set; the password is part of the cache key so a credential change takes effect in the long-running worker.
+- Deliverability lives in `sendEmail`: an auto-generated text/plain alternative (`htmlToText`), `List-Unsubscribe` + `List-Unsubscribe-Post` one-click headers, and an envelope sender aligned with `From` so SPF passes for DMARC.
+- `Campaign.provider` is now only `"SMTP" | "WHATSAPP"`; `domainId` is gone from campaigns.
+
+### Email authentication (`lib/email-auth.ts`)
+
+The Domains feature no longer provisions anything — it is a read-only DNS checker. `checkDomainAuth(domain, selector?)` resolves SPF, DKIM and DMARC and returns PASS/WARN/FAIL plus a fix hint per record; results are cached on the `Domain` document and rendered by `components/settings/DomainList.tsx`. DKIM selectors cannot be discovered, so a list of common provider selectors is probed and the user can supply their own. A domain is `VERIFIED` only when all three pass.
+
+**Existing databases need `npx tsx scripts/migrate-domain-indexes.ts --fix` once** to drop the legacy globally-unique `domainName_1` index.
 
 ### Onboarding
 
 New workspaces (no `onboardingCompletedAt`, zero campaigns/contacts) are redirected from `/dashboard` (server component gate) to the `/dashboard/welcome` wizard. Completion/skip is recorded via `POST /api/onboarding`. The dashboard's setup checklist comes from the `checklist` block in `GET /api/dashboard/stats`. Global starter templates ("the gallery") live in `lib/gallery-templates.ts` — reseed with `POST /api/cron/seed-templates` (CRON_SECRET bearer); template `emailDesign` is `{ editor: "tiptap", content: <html string> }` and bodies must stay within the SimpleEmailEditor's schema (see authoring rules in that file).
 
+### Contact import (shared email + WhatsApp format)
+
+`lib/contact-import.ts` is the single source of truth for the canonical contact shape, used by the upload UI, `POST /api/contacts/lists/[id]/import` and the manual add-contact route. A contact needs **either** an `email` **or** a `whatsappNumber` — `email` is optional on the model, so every email send path must filter on `contact.email` being present (see `app/api/campaigns/[id]/send/route.ts` and `/api/cron/dispatch-scheduled`).
+
+- A contact has exactly **four** user-facing fields: `fullName`, `email`, `phone`, `whatsappNumber` (`CONTACT_IMPORT_FIELDS`). Both the import mapping UI and `AddContactModal` expose that set and nothing else — keep them in step.
+- `fullName` is stored split into `firstName`/`lastName` (`splitFullName`, rejoined for display/export with `joinFullName`) because `{{firstName}}` personalization reads those columns.
+- WhatsApp consent is not a column: `whatsappOptIn` comes from the checkbox on the upload screen (or is implied by adding a number manually).
+- Headers are auto-mapped through the alias table in `CONTACT_IMPORT_FIELDS`; the mapping UI just lets the user override it. `normalizeMapping` drops mapping keys outside the four canonical fields (legacy `name`/`firstName` → `fullName`, `number` → `whatsappNumber` + `phone`).
+- Numbers are normalized to E.164 with `libphonenumber-js`. Storage: `whatsappNumber` = digits, no `+` (what the Graph API wants); `phone` = E.164 with `+`, falling back to the raw string.
+- Dedupe key is email, or the WhatsApp number for email-less contacts (`contactKey`). Uniqueness per list is enforced by two **partial** unique indexes in `models/Contact.ts`.
+- Import is batched (two lookup queries + `insertMany`/`bulkWrite`), not per-row.
+- **Existing databases need `npx tsx scripts/migrate-contact-indexes.ts --fix` once** to drop the legacy `email_1_listId_1` unique index — otherwise email-less contacts fail to insert.
+
 ### Campaign lifecycle
 
-Status flow: `DRAFT → SCHEDULED/SENDING → SENT` (or `CANCELLED`). Scheduled sends rely on a Vercel cron (`vercel.json`) hitting `/api/cron/dispatch-scheduled` every minute. Engagement flows back through public endpoints under `app/api/track/` (open pixel, click redirect, bounce) and `/api/unsubscribe`, updating `CampaignRecipient` status and campaign counters. Sends are suppressed for contacts not in `ACTIVE` status.
+Status flow: `DRAFT → SCHEDULED/SENDING → SENT` (or `CANCELLED`). Scheduled sends rely on a Vercel cron (`vercel.json`) hitting `/api/cron/dispatch-scheduled` every minute. Engagement flows back through public endpoints under `app/api/track/` (open pixel, click redirect) and `/api/unsubscribe`, updating `CampaignRecipient` status and campaign counters. Sends are suppressed for contacts not in `ACTIVE` status.
 
 ### Billing limits
 
@@ -68,4 +90,4 @@ shadcn/ui (Radix) components in `components/ui/`, feature components grouped by 
 
 ## Environment
 
-Copy `.env.example` to `.env`. Minimum for local dev: `MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and `REDIS_URL` (local Redis works) if running the worker. The worker loads `.env.local` then `.env` via dotenv; the Next app uses its normal env loading.
+Copy `.env.example` to `.env`. Minimum for local dev: `MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and `REDIS_URL` (local Redis works) if running the worker. Email sending needs no env at all — SMTP credentials are per-workspace and entered in the UI. The worker loads `.env.local` then `.env` via dotenv; the Next app uses its normal env loading.

@@ -10,11 +10,11 @@ interface AddContactModalProps {
     onSubmit: (data: Partial<Contact>) => Promise<void>;
 }
 
+// The four fields a contact has — same set the CSV importer maps onto
+// (`CONTACT_IMPORT_FIELDS` in lib/contact-import.ts). Keep the two in step.
 export function AddContactModal({ isOpen, onClose, onSubmit }: AddContactModalProps) {
+    const [fullName, setFullName] = useState("");
     const [email, setEmail] = useState("");
-    const [firstName, setFirstName] = useState("");
-    const [lastName, setLastName] = useState("");
-    const [company, setCompany] = useState("");
     const [phone, setPhone] = useState("");
     const [whatsappNumber, setWhatsappNumber] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,10 +23,8 @@ export function AddContactModal({ isOpen, onClose, onSubmit }: AddContactModalPr
     if (!isOpen) return null;
 
     const handleClose = () => {
+        setFullName("");
         setEmail("");
-        setFirstName("");
-        setLastName("");
-        setCompany("");
         setPhone("");
         setWhatsappNumber("");
         setError("");
@@ -37,20 +35,20 @@ export function AddContactModal({ isOpen, onClose, onSubmit }: AddContactModalPr
         e.preventDefault();
         setError("");
 
-        if (!email.trim()) {
-            setError("Email is required");
+        if (!email.trim() && !whatsappNumber.trim()) {
+            setError("Enter an email address or a WhatsApp number — a contact needs at least one.");
             return;
         }
 
         setIsSubmitting(true);
         try {
+            // The API normalizes the numbers to E.164 and splits the name into
+            // firstName/lastName — send everything as typed.
             await onSubmit({
-                email: email.trim(),
-                firstName: firstName.trim() || undefined,
-                lastName: lastName.trim() || undefined,
-                company: company.trim() || undefined,
+                fullName: fullName.trim() || undefined,
+                email: email.trim() || undefined,
                 phone: phone.trim() || undefined,
-                whatsappNumber: whatsappNumber.trim().replace(/[^0-9]/g, "") || undefined
+                whatsappNumber: whatsappNumber.trim() || undefined,
             });
             handleClose();
         } catch (err: unknown) {
@@ -74,49 +72,26 @@ export function AddContactModal({ isOpen, onClose, onSubmit }: AddContactModalPr
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
+                        <input
+                            type="text"
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            placeholder="Alice Sharma"
+                            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
+                            autoFocus
+                        />
+                    </div>
+
+                    <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                            Email <span className="text-red-500">*</span>
+                            Email
                         </label>
                         <input
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="alice@example.com"
-                            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                            autoFocus
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">First Name</label>
-                            <input
-                                type="text"
-                                value={firstName}
-                                onChange={(e) => setFirstName(e.target.value)}
-                                placeholder="Alice"
-                                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Last Name</label>
-                            <input
-                                type="text"
-                                value={lastName}
-                                onChange={(e) => setLastName(e.target.value)}
-                                placeholder="Smith"
-                                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Company</label>
-                        <input
-                            type="text"
-                            value={company}
-                            onChange={(e) => setCompany(e.target.value)}
-                            placeholder="Acme Corp"
                             className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
                         />
                     </div>
@@ -138,11 +113,16 @@ export function AddContactModal({ isOpen, onClose, onSubmit }: AddContactModalPr
                                 type="tel"
                                 value={whatsappNumber}
                                 onChange={(e) => setWhatsappNumber(e.target.value)}
-                                placeholder="15550000000"
+                                placeholder="+1 555 000 0000"
                                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
                             />
                         </div>
                     </div>
+
+                    <p className="text-xs text-gray-400">
+                        Fill in the email to reach this contact by email, the WhatsApp number to reach them on
+                        WhatsApp, or both. Include the country code on numbers.
+                    </p>
 
                     {error && (
                         <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">

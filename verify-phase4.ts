@@ -51,7 +51,7 @@ async function runVerification() {
         await addEmailJob({
             campaignId: campaign._id.toString(),
             contactId: contact._id.toString(),
-            recipientEmail: contact.email,
+            recipientEmail: contact.email!,
             recipientName: contact.firstName
         });
 

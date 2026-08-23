@@ -3,8 +3,17 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import Domain from "@/models/Domain";
-import { getDomainVerificationStatus } from "@/lib/email-service";
+import { checkDomainAuth } from "@/lib/email-auth";
 
+/**
+ * GET /api/domains/[id]/verify
+ * Re-resolves SPF / DKIM / DMARC for the domain and caches the result. Purely a
+ * DNS read — it provisions nothing and gates nothing, it just tells the user
+ * which records are missing before they send a campaign.
+ *
+ * Optional query param: ?selector=<dkim-selector> to check a provider-specific
+ * DKIM selector. It is remembered for later checks.
+ */
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -18,43 +27,33 @@ export async function GET(
 
         await connectDB();
 
-        const domain = await Domain.findById(id);
+        const domain = await Domain.findOne({ _id: id, workspaceId: session.user.workspaceId });
         if (!domain) {
             return NextResponse.json({ error: "Domain not found" }, { status: 404 });
         }
 
-        // Check if user is authorized to this domain's workspace
-        if (domain.workspaceId.toString() !== session.user.workspaceId?.toString()) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        const selector = new URL(req.url).searchParams.get("selector") || domain.dkimSelector || undefined;
+        const report = await checkDomainAuth(domain.domainName, selector);
 
-        // Poll SES for latest status
-        const [identityStatus, dkimInfo] = await Promise.all([
-            getDomainVerificationStatus(domain.domainName),
-            import("@/lib/email-service").then(m => m.getDomainDkimStatus(domain.domainName))
-        ]);
+        domain.spf = report.spf;
+        domain.dkim = report.dkim;
+        domain.dmarc = report.dmarc;
+        domain.dkimSelector = report.dkim.selector || selector;
+        domain.lastCheckedAt = report.checkedAt;
+        // FAIL only once a check has actually run and come back missing —
+        // that is what distinguishes it from the initial PENDING state.
+        domain.verificationStatus = report.authenticated
+            ? "VERIFIED"
+            : report.spf.status === "FAIL" || report.dkim.status === "FAIL" || report.dmarc.status === "FAIL"
+                ? "FAILED"
+                : "PENDING";
+        await domain.save();
 
-        // Map SES status to our local status
-        let localStatus: 'PENDING' | 'VERIFIED' | 'FAILED' = "PENDING";
-
-        // Both identity AND DKIM must be successful for full verification in our app 
-        // (optional, but encouraged for deliverability)
-        if (identityStatus === "Success" && dkimInfo.status === "Success") {
-            localStatus = "VERIFIED";
-        } else if (identityStatus === "Failed" || dkimInfo.status === "Failed") {
-            localStatus = "FAILED";
-        }
-
-        // Update local DB if status or tokens changed
-        if (domain.verificationStatus !== localStatus || domain.dkimTokens?.length === 0) {
-            domain.verificationStatus = localStatus;
-            if (dkimInfo.tokens.length > 0) {
-                domain.dkimTokens = dkimInfo.tokens;
-            }
-            await domain.save();
-        }
-
-        return NextResponse.json({ success: true, status: domain.verificationStatus });
+        return NextResponse.json({
+            success: true,
+            status: domain.verificationStatus,
+            data: domain,
+        });
     } catch (error) {
         console.error("[DOMAIN_VERIFY_GET]", error);
         return NextResponse.json(

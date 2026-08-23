@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { ContactList, Contact } from "@/models/Contact";
 import mongoose from "mongoose";
+import { joinFullName } from "@/lib/contact-import";
 
 // GET /api/contacts/lists/[id]/export
 // Returns a CSV file download
@@ -34,14 +35,14 @@ export async function GET(
 
         const contacts = await Contact.find({ listId: id }).sort({ createdAt: -1 }).lean();
 
-        // Build CSV
-        const headers = ["email", "firstName", "lastName", "company", "phone", "status", "createdAt"];
+        // Build CSV — same four columns the importer accepts, so an export can
+        // be re-imported as-is.
+        const headers = ["name", "email", "phone", "whatsapp", "status", "createdAt"];
         const rows = contacts.map((c) => [
-            c.email,
-            c.firstName ?? "",
-            c.lastName ?? "",
-            c.company ?? "",
+            joinFullName(c),
+            c.email ?? "",
             c.phone ?? "",
+            c.whatsappNumber ?? "",
             c.status,
             new Date(c.createdAt).toISOString(),
         ]);

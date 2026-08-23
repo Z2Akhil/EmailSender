@@ -44,8 +44,11 @@ interface Props {
 import { wrapEmailHtml } from "@/lib/email-html";
 export { wrapEmailHtml };
 
+// Tags resolved at send time by lib/personalize.ts — keep the two in step.
 const VARIABLES = [
+    { label: "Full name", value: "{{fullName}}", icon: User },
     { label: "First name", value: "{{firstName}}", icon: User },
+    { label: "Last name", value: "{{lastName}}", icon: User },
     { label: "Email address", value: "{{email}}", icon: AtSign },
 ];
 

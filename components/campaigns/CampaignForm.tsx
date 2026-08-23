@@ -119,8 +119,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         emailDesign: initialData?.emailDesign || null,
         textContent: initialData?.textContent || "",
         recipientListId: initialData?.recipientListId || "",
-        domainId: initialData?.domainId || "",
-        provider: ((initialData as any)?.provider || "SES") as "SES" | "SMTP" | "SHARED" | "WHATSAPP",
+        provider: ((initialData as any)?.provider || "SMTP") as "SMTP" | "WHATSAPP",
         channel: initialData?.channel || "EMAIL",
     });
 
@@ -146,8 +145,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                 emailDesign: initialData.emailDesign || null,
                 textContent: initialData.textContent || "",
                 recipientListId: initialData.recipientListId || "",
-                domainId: initialData.domainId || "",
-                provider: (initialData as any).provider || "SES",
+                provider: (initialData as any).provider || "SMTP",
                 channel: initialData.channel || "EMAIL",
             });
         }
@@ -216,7 +214,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         },
     });
 
-    const { data: smtpData } = useQuery<ApiResponse<any>>({
+    const { data: smtpData, isLoading: isLoadingSmtp } = useQuery<ApiResponse<any>>({
         queryKey: ["smtp"],
         queryFn: async () => {
             const res = await fetch("/api/settings/smtp");
@@ -235,52 +233,26 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
         enabled: formData.channel === "WHATSAPP",
     });
 
-    const { data: sendingData, isLoading: isLoadingSending } = useQuery<ApiResponse<{
-        sharedEnabled: boolean;
-        sharedFromEmail: string | null;
-        sharedFromNameSuffix: string;
-        defaultReplyTo: string | null;
-        workspaceName: string | null;
-    }>>({
-        queryKey: ["sending-settings"],
-        queryFn: async () => {
-            const res = await fetch("/api/settings/sending");
-            if (!res.ok) throw new Error("Failed to fetch sending settings");
-            return res.json();
-        },
-    });
-    const sending = sendingData?.data;
-
-    // Simple mode = zero-setup sending via the platform's shared identity.
-    // Derived once per campaign: new campaigns default to simple when available;
-    // editing keeps whatever the draft was saved with.
-    const [sendingMode, setSendingMode] = useState<"SIMPLE" | "ADVANCED" | null>(null);
+    // Prefill the sender from the connected SMTP account — the address mail can
+    // actually be sent as.
     useEffect(() => {
-        if (!sending || sendingMode !== null) return;
-        if (initialData?.id) {
-            setSendingMode((initialData as any).provider === "SHARED" ? "SIMPLE" : "ADVANCED");
-        } else {
-            setSendingMode(sending.sharedEnabled ? "SIMPLE" : "ADVANCED");
-        }
-    }, [sending, sendingMode, initialData]);
-
-    // Entering simple mode: set provider + prefill brand name and reply-to
-    useEffect(() => {
-        if (sendingMode !== "SIMPLE" || !sending?.sharedEnabled) return;
-        setFormData(prev => ({
-            ...prev,
-            provider: "SHARED",
-            domainId: "",
-            fromEmail: sending.sharedFromEmail || "",
-            fromName: prev.fromName || sending.workspaceName || "",
-            replyTo: prev.replyTo || sending.defaultReplyTo || "",
-        }));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sendingMode, sending?.sharedEnabled]);
+        const user = smtpData?.data?.smtpUser;
+        if (!user || initialData?.id) return;
+        setFormData(prev => (prev.fromEmail ? prev : { ...prev, fromEmail: user }));
+    }, [smtpData, initialData]);
 
     const templates = templatesData?.data || [];
-    const verifiedDomains = domainsData?.data?.filter(d => d.verificationStatus === "VERIFIED") || [];
     const isSmtpConfigured = !!smtpData?.data?.smtpHost;
+    const smtpUser = smtpData?.data?.smtpUser || "";
+    // One-line SPF/DKIM/DMARC state for the sending domain, when it has been checked.
+    const sendingDomain = formData.fromEmail.split("@")[1]?.toLowerCase();
+    const authSummary = (() => {
+        const domain = domainsData?.data?.find(d => d.domainName === sendingDomain);
+        if (!domain) return null;
+        return domain.verificationStatus === "VERIFIED"
+            ? "SPF, DKIM and DMARC all pass"
+            : "email authentication incomplete";
+    })();
     const channelTemplates = templates.filter(t =>
         t.type === formData.channel || (!t.type && formData.channel === "EMAIL")
     );
@@ -546,186 +518,86 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                         />
                                     </div>
 
-                                    {/* Sender configuration: Simple (shared identity) vs Advanced */}
-                                    {(isLoadingSending || sendingMode === null) && (
+                                    {/* Sender identity — always the workspace's own SMTP account. */}
+                                    {isLoadingSmtp ? (
                                         <div className="h-24 bg-gray-50 rounded-xl animate-pulse" />
-                                    )}
-
-                                    {sendingMode === "SIMPLE" && sending?.sharedEnabled && (
-                                        <div className="space-y-4">
+                                    ) : !isSmtpConfigured ? (
+                                        <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                                            <p className="text-sm font-semibold text-amber-900">No sending account connected</p>
+                                            <p className="text-xs text-amber-700 mt-1">
+                                                Campaigns send through your own email account, so recipients see your real
+                                                address. Connect it once in{" "}
+                                                <Link href="/dashboard/settings/smtp" className="underline font-semibold">
+                                                    Settings → SMTP
+                                                </Link>
+                                                {" "}— Gmail, Zoho, Outlook or your host all work.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-6">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="space-y-2">
                                                     <label className="text-sm font-semibold text-gray-700">From Name</label>
                                                     <input
                                                         type="text"
-                                                        placeholder="e.g. Acme Inc"
+                                                        placeholder="e.g. John from Acme"
                                                         className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
                                                         value={formData.fromName}
                                                         onChange={e => setFormData({ ...formData, fromName: e.target.value })}
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-sm font-semibold text-gray-700">Reply-to Email</label>
+                                                    <label className="text-sm font-semibold text-gray-700">From Email Address</label>
                                                     <input
                                                         type="email"
                                                         placeholder="you@yourbrand.com"
                                                         className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                                        value={formData.replyTo}
-                                                        onChange={e => setFormData({ ...formData, replyTo: e.target.value })}
+                                                        value={formData.fromEmail}
+                                                        onChange={e => setFormData({ ...formData, fromEmail: e.target.value })}
                                                     />
-                                                    <p className="text-[11px] text-gray-400">Replies from recipients land here.</p>
+                                                    {/* Sending as an address the SMTP account does not own is the
+                                                        single most common cause of a rejected or spam-foldered send. */}
+                                                    {smtpUser && formData.fromEmail && formData.fromEmail !== smtpUser && (
+                                                        <p className="text-[11px] text-amber-600">
+                                                            Your SMTP account is <span className="font-mono">{smtpUser}</span>. Most
+                                                            providers only allow sending as that address or an alias of it.{" "}
+                                                            <button
+                                                                type="button"
+                                                                className="underline font-semibold"
+                                                                onClick={() => setFormData({ ...formData, fromEmail: smtpUser })}
+                                                            >
+                                                                Use it
+                                                            </button>
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
 
-                                            <div className="p-3.5 bg-blue-50/60 border border-blue-100 rounded-xl">
-                                                <p className="text-xs text-blue-800">
-                                                    Recipients will see:{" "}
-                                                    <span className="font-semibold">
-                                                        &ldquo;{formData.fromName || "Your Brand"} {sending.sharedFromNameSuffix}&rdquo;
-                                                    </span>{" "}
-                                                    <span className="font-mono text-blue-600">&lt;{sending.sharedFromEmail}&gt;</span>
-                                                </p>
-                                                <p className="text-[11px] text-blue-600/70 mt-1">
-                                                    No setup needed — sent through our verified servers.
-                                                </p>
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setSendingMode("ADVANCED");
-                                                    setFormData(prev => ({ ...prev, provider: "SES", fromEmail: "" }));
-                                                }}
-                                                className="text-xs font-semibold text-gray-500 hover:text-blue-600 underline underline-offset-2"
-                                            >
-                                                Use your own domain or SMTP instead →
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {sendingMode === "ADVANCED" && sending?.sharedEnabled && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setSendingMode("SIMPLE")}
-                                            className="text-xs font-semibold text-gray-500 hover:text-blue-600 underline underline-offset-2"
-                                        >
-                                            ← Switch back to simple sending (no setup needed)
-                                        </button>
-                                    )}
-
-                                    {sendingMode === "ADVANCED" && (verifiedDomains.length > 0 && isSmtpConfigured) && (
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-semibold text-gray-700">Email Provider</label>
-                                            <div className="flex bg-gray-50 p-1 rounded-xl w-fit border border-gray-100">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData({ ...formData, provider: "SES", domainId: verifiedDomains[0]?._id || verifiedDomains[0]?.id || "" })}
-                                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${formData.provider === "SES" ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"
-                                                        }`}
-                                                >
-                                                    Amazon SES
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData({
-                                                        ...formData,
-                                                        provider: "SMTP",
-                                                        domainId: "",
-                                                        fromEmail: smtpData?.data?.smtpUser || formData.fromEmail
-                                                    })}
-                                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${formData.provider === "SMTP" ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"
-                                                        }`}
-                                                >
-                                                    Custom SMTP
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {sendingMode === "ADVANCED" && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-semibold text-gray-700">From Name</label>
-                                            <input
-                                                type="text"
-                                                placeholder="e.g. John from BulkMailer"
-                                                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                                value={formData.fromName}
-                                                onChange={e => setFormData({ ...formData, fromName: e.target.value })}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-semibold text-gray-700">From Email Address</label>
-                                            {formData.provider === "SES" ? (
-                                                <>
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="text"
-                                                            placeholder="hello"
-                                                            className="w-1/2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all text-right"
-                                                            value={formData.fromEmail.split("@")[0]}
-                                                            onChange={e => {
-                                                                const prefix = e.target.value;
-                                                                const domain = formData.fromEmail.split("@")[1] || (verifiedDomains[0]?.domainName || "");
-                                                                setFormData({ ...formData, fromEmail: `${prefix}@${domain}` });
-                                                            }}
-                                                        />
-                                                        <div className="flex items-center text-gray-400">@</div>
-                                                        <select
-                                                            className="w-1/2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                                            value={formData.domainId || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?._id || verifiedDomains.find(d => d.domainName === formData.fromEmail.split("@")[1])?.id || ""}
-                                                            onChange={e => {
-                                                                const domainId = e.target.value;
-                                                                const domain = verifiedDomains.find(d => d._id === domainId || d.id === domainId);
-                                                                if (domain) {
-                                                                    const prefix = formData.fromEmail.split("@")[0] || "hello";
-                                                                    setFormData({
-                                                                        ...formData,
-                                                                        domainId,
-                                                                        fromEmail: `${prefix}@${domain.domainName}`
-                                                                    });
-                                                                }
-                                                            }}
-                                                        >
-                                                            <option value="" disabled>Select Domain</option>
-                                                            {verifiedDomains.map(d => (
-                                                                <option key={d._id || d.id} value={d._id || d.id}>{d.domainName}</option>
-                                                            ))}
-                                                            {verifiedDomains.length === 0 && (
-                                                                <option value="" disabled>No verified domains</option>
-                                                            )}
-                                                        </select>
-                                                    </div>
-                                                    {verifiedDomains.length === 0 && (
-                                                        <p className="text-[11px] text-amber-600 flex items-center gap-1 mt-1">
-                                                            <Plus className="w-3 h-3" />
-                                                            No verified domains found. <Link href="/dashboard/settings/domains" className="underline">Add one in settings</Link>.
-                                                        </p>
-                                                    )}
-                                                </>
-                                            ) : (
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-semibold text-gray-700">Reply-to Email (Optional)</label>
                                                 <input
                                                     type="email"
-                                                    placeholder="hello@yourbrand.com"
+                                                    placeholder="support@yourbrand.com"
                                                     className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                                    value={formData.fromEmail}
-                                                    onChange={e => setFormData({ ...formData, fromEmail: e.target.value })}
+                                                    value={formData.replyTo}
+                                                    onChange={e => setFormData({ ...formData, replyTo: e.target.value })}
                                                 />
-                                            )}
+                                            </div>
+
+                                            <div className="p-3.5 bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-between gap-3">
+                                                <p className="text-xs text-gray-600">
+                                                    Sending through{" "}
+                                                    <span className="font-mono font-semibold">{smtpData?.data?.smtpHost}</span>
+                                                    {authSummary && <> · {authSummary}</>}
+                                                </p>
+                                                <Link
+                                                    href="/dashboard/settings/domains"
+                                                    className="text-xs font-semibold text-blue-600 hover:underline whitespace-nowrap"
+                                                >
+                                                    Check SPF/DKIM
+                                                </Link>
+                                            </div>
                                         </div>
-                                    </div>
-                                    )}
-                                    {sendingMode === "ADVANCED" && (
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-gray-700">Reply-to Email (Optional)</label>
-                                        <input
-                                            type="email"
-                                            placeholder="support@yourbrand.com"
-                                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all"
-                                            value={formData.replyTo}
-                                            onChange={e => setFormData({ ...formData, replyTo: e.target.value })}
-                                        />
-                                    </div>
                                     )}
                                 </>
                             )}
@@ -986,7 +858,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-blue-900">Pro Tip</p>
-                                        <p className="text-xs text-blue-700 mt-0.5">You can use double curly braces for personalization, like &#x7B;&#x7B;firstName&#x7D;&#x7D; or &#x7B;&#x7B;email&#x7D;&#x7D;.</p>
+                                        <p className="text-xs text-blue-700 mt-0.5">Personalize with &#x7B;&#x7B;fullName&#x7D;&#x7D;, &#x7B;&#x7B;firstName&#x7D;&#x7D;, &#x7B;&#x7B;lastName&#x7D;&#x7D; or &#x7B;&#x7B;email&#x7D;&#x7D; — spelling is not case-sensitive.</p>
                                     </div>
                                 </div>
                             </div>
@@ -1026,12 +898,9 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                                                 <div>
                                                     <dt className="text-xs text-gray-500">From</dt>
                                                     <dd className="text-sm font-semibold text-gray-900">
-                                                        {formData.provider === "SHARED"
-                                                            ? `"${formData.fromName} ${sending?.sharedFromNameSuffix || "via BulkMailer"}"`
-                                                            : formData.fromName}{" "}
-                                                        &lt;{formData.fromEmail}&gt;
+                                                        {formData.fromName} &lt;{formData.fromEmail}&gt;
                                                     </dd>
-                                                    {formData.provider === "SHARED" && formData.replyTo && (
+                                                    {formData.replyTo && (
                                                         <dd className="text-xs text-gray-500 mt-0.5">Replies go to {formData.replyTo}</dd>
                                                     )}
                                                 </div>
@@ -1174,9 +1043,7 @@ export function CampaignForm({ initialData, isEditing = false }: CampaignFormPro
                             (currentStep === "SETTINGS" && (
                                 !formData.name ||
                                 (formData.channel === "EMAIL" && (
-                                    !formData.subject || !formData.fromName ||
-                                    // Simple mode: fromEmail is auto-set but replies must reach the user
-                                    (formData.provider === "SHARED" ? !formData.replyTo : !formData.fromEmail)
+                                    !formData.subject || !formData.fromName || !formData.fromEmail
                                 ))
                             )) ||
                             // Email may start from scratch; WhatsApp must pick an approved template

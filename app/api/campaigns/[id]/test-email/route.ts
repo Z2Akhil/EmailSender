@@ -4,7 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
 import { sendEmail } from "@/lib/email-service";
-import { isSharedSendingEnabled, composeSharedSender } from "@/lib/shared-sending";
+import { getWorkspaceSmtpConfig } from "@/lib/workspace-smtp";
+import { applyPersonalization } from "@/lib/personalize";
 import { z } from "zod";
 
 const testEmailSchema = z.object({
@@ -45,10 +46,13 @@ export async function POST(
             return NextResponse.json({ success: false, error: "Campaign has no HTML content" }, { status: 400 });
         }
 
-        // Replace personalization tags with preview values
-        let html = campaign.htmlContent;
-        html = html.replace(/{{firstName}}/g, "Preview User");
-        html = html.replace(/{{email}}/g, to);
+        // Same substituter the worker uses, so a test renders exactly like the
+        // real send — only the values are placeholders.
+        let html = applyPersonalization(campaign.htmlContent, {
+            firstName: "Preview",
+            lastName: "User",
+            email: to,
+        });
         html = html.replace(/\{{{unsubscribeUrl}}}/g, "#");
         html = html.replace(/{{unsubscribeUrl}}/g, "#");
 
@@ -59,29 +63,24 @@ export async function POST(
 </div>`;
         html = testBanner + html;
 
-        // Compose the shared sender exactly like the worker does, so the
-        // test email matches what recipients will actually see
-        let fromName = campaign.fromName;
-        let fromEmail = campaign.fromEmail;
-        let replyTo = campaign.replyTo;
-        if (campaign.provider === "SHARED") {
-            if (!isSharedSendingEnabled()) {
-                return NextResponse.json(
-                    { success: false, error: "Shared sending is not configured on this server." },
-                    { status: 400 }
-                );
-            }
-            ({ fromName, fromEmail } = composeSharedSender(campaign.fromName));
-            replyTo = campaign.replyTo || session.user.email || undefined;
+        // Same account the campaign will really send from, so the test shows
+        // recipients exactly what they would get.
+        const smtpConfig = await getWorkspaceSmtpConfig(session.user.workspaceId);
+        if (!smtpConfig) {
+            return NextResponse.json(
+                { success: false, error: "No SMTP server is configured. Add one in Settings → SMTP." },
+                { status: 400 }
+            );
         }
 
         await sendEmail({
             to,
             subject: `[TEST] ${campaign.subject || campaign.name}`,
             html,
-            fromName,
-            fromEmail,
-            replyTo,
+            fromName: campaign.fromName,
+            fromEmail: campaign.fromEmail,
+            replyTo: campaign.replyTo,
+            smtpConfig,
         });
 
         return NextResponse.json({

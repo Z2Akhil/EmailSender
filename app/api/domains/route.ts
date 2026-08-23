@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import Domain from "@/models/Domain";
 import { createDomainSchema } from "@/lib/validations/domain";
-import { requestDomainVerification } from "@/lib/email-service";
+import { checkDomainAuth } from "@/lib/email-auth";
 
 export async function GET() {
     try {
@@ -56,27 +56,29 @@ export async function POST(req: NextRequest) {
 
         await connectDB();
 
-        // Check if domain already exists
-        const existingDomain = await Domain.findOne({ domainName: result.data.domainName });
+        // Scoped to the workspace: checking a domain is a read-only DNS lookup,
+        // so two workspaces tracking the same domain is legitimate.
+        const existingDomain = await Domain.findOne({ domainName: result.data.domainName, workspaceId });
         if (existingDomain) {
             return NextResponse.json(
-                { error: "Domain already registered" },
+                { error: "You have already added this domain" },
                 { status: 400 }
             );
         }
 
-        // Call SES to start verification
-        const [verificationToken, dkimTokens] = await Promise.all([
-            requestDomainVerification(result.data.domainName),
-            import("@/lib/email-service").then(m => m.getDomainDkimTokens(result.data.domainName))
-        ]);
+        // Run the DNS check immediately so the row is never shown as an
+        // uninformative "PENDING".
+        const report = await checkDomainAuth(result.data.domainName, body.dkimSelector);
 
         const newDomain = await Domain.create({
-            domainName: result.data.domainName,
+            domainName: report.domain,
             workspaceId,
-            verificationStatus: "PENDING",
-            verificationToken,
-            dkimTokens,
+            dkimSelector: report.dkim.selector || body.dkimSelector || undefined,
+            verificationStatus: report.authenticated ? "VERIFIED" : "PENDING",
+            spf: report.spf,
+            dkim: report.dkim,
+            dmarc: report.dmarc,
+            lastCheckedAt: report.checkedAt,
         });
 
         return NextResponse.json({ success: true, data: newDomain }, { status: 201 });

@@ -40,7 +40,6 @@ export async function POST(
             replyTo: original.replyTo,
             channel: original.channel,
             provider: original.provider,
-            domainId: original.domainId,
             templateId: original.templateId,
             recipientListId: original.recipientListId,
             workspaceId: original.workspaceId,

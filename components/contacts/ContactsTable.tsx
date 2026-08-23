@@ -71,7 +71,7 @@ export function ContactsTable({
                         <tr className="border-b border-gray-100 bg-gray-50/60">
                             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3.5">Email</th>
                             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5">Name</th>
-                            <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5 hidden md:table-cell">Company</th>
+                            <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5 hidden md:table-cell">Phone</th>
                             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5 hidden sm:table-cell">WhatsApp</th>
                             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5">Status</th>
                             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3.5 hidden lg:table-cell">Added</th>
@@ -82,15 +82,16 @@ export function ContactsTable({
                         {contacts.map((contact) => (
                             <tr key={contact.id} className="hover:bg-gray-50/50 transition-colors group">
                                 <td className="px-6 py-4">
-                                    <span className="font-medium text-gray-900">{contact.email}</span>
+                                    {contact.email
+                                        ? <span className="font-medium text-gray-900">{contact.email}</span>
+                                        : <span className="text-xs text-gray-400 italic">WhatsApp only</span>}
                                 </td>
                                 <td className="px-4 py-4 text-gray-600">
-                                    {contact.firstName || contact.lastName
-                                        ? `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim()
-                                        : <span className="text-gray-300">—</span>}
+                                    {contact.fullName || `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim()
+                                        || <span className="text-gray-300">—</span>}
                                 </td>
-                                <td className="px-4 py-4 text-gray-600 hidden md:table-cell">
-                                    {contact.company || <span className="text-gray-300">—</span>}
+                                <td className="px-4 py-4 text-gray-600 hidden md:table-cell font-mono text-xs">
+                                    {contact.phone || <span className="text-gray-300">—</span>}
                                 </td>
                                 <td className="px-4 py-4 text-gray-600 hidden sm:table-cell font-mono text-xs">
                                     {contact.whatsappNumber || <span className="text-gray-300">—</span>}

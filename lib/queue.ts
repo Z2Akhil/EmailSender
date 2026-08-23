@@ -28,7 +28,9 @@ export const addEmailJob = async (data: {
     campaignId: string;
     contactId: string;
     recipientEmail: string;
+    /** First name — kept as `recipientName` for in-flight jobs from older deploys. */
     recipientName?: string;
+    recipientLastName?: string;
 }) => {
     const queue = getEmailQueue();
     return queue.add(`send-email-${data.campaignId}-${data.contactId}`, data);

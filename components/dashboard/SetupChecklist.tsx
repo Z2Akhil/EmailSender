@@ -7,6 +7,7 @@ import { CheckCircle2, Circle, X, Sparkles } from "lucide-react";
 export interface ChecklistState {
     hasContacts: boolean;
     hasSentCampaign: boolean;
+    smtpConnected: boolean;
     hasCustomDomain: boolean;
     whatsappConnected: boolean;
     dismissed: boolean;
@@ -19,13 +20,14 @@ interface Props {
 export function SetupChecklist({ checklist }: Props) {
     const queryClient = useQueryClient();
 
-    const coreDone = checklist.hasContacts && checklist.hasSentCampaign;
+    const coreDone = checklist.smtpConnected && checklist.hasContacts && checklist.hasSentCampaign;
     if (checklist.dismissed || coreDone) return null;
 
     const items = [
+        { done: checklist.smtpConnected, label: "Connect your email account", href: "/dashboard/settings/smtp", core: true },
         { done: checklist.hasContacts, label: "Add your contacts", href: "/dashboard/contacts", core: true },
         { done: checklist.hasSentCampaign, label: "Send your first campaign", href: "/dashboard/campaigns/new", core: true },
-        { done: checklist.hasCustomDomain, label: "Verify a custom domain", href: "/dashboard/settings/domains", core: false },
+        { done: checklist.hasCustomDomain, label: "Pass SPF, DKIM and DMARC", href: "/dashboard/settings/domains", core: false },
         { done: checklist.whatsappConnected, label: "Connect WhatsApp", href: "/dashboard/settings/whatsapp", core: false },
     ];
     const doneCount = items.filter(i => i.done).length;

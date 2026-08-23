@@ -10,12 +10,16 @@ export type ContactStatus = "ACTIVE" | "UNSUBSCRIBED" | "BOUNCED";
 
 export interface Contact {
     id: string;
-    email: string;
+    /** Absent on WhatsApp-only contacts — a contact needs email OR whatsappNumber. */
+    email?: string | null;
+    /** Split halves of the full name — `{{firstName}}` personalization reads them. */
     firstName?: string | null;
     lastName?: string | null;
-    company?: string | null;
+    /** `firstName` + `lastName`, as entered. */
+    fullName?: string | null;
     phone?: string | null;
     whatsappNumber?: string | null;
+    whatsappOptIn?: boolean;
     listId: string;
     status: ContactStatus;
     createdAt: Date;

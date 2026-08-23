@@ -5,26 +5,39 @@ import { connectDB } from "@/lib/db";
 import { ContactList, Contact } from "@/models/Contact";
 import mongoose from "mongoose";
 import { checkPlanLimits } from "@/lib/stripe";
+import type { CountryCode } from "libphonenumber-js";
+import {
+    autoMapColumns,
+    contactKey,
+    isEmailReady,
+    isWhatsappReady,
+    normalizeMapping,
+    normalizeRow,
+    type ColumnMapping,
+    type LegacyColumnMapping,
+    type NormalizedContact,
+} from "@/lib/contact-import";
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type RawRow = Record<string, unknown>;
 
-interface RawRow {
-    [key: string]: string;
-}
-
-interface ColumnMapping {
-    email: string;
-    firstName?: string;
-    lastName?: string;
-    company?: string;
-    phone?: string;
-    whatsappNumber?: string;
+interface RowError {
+    row: number;
+    identifier: string;
+    reason: string;
 }
 
 // POST /api/contacts/lists/[id]/import
-// Accepts multipart/form-data with:
-//   - file: CSV or XLSX file
-//   - mapping: JSON string of { email, firstName?, lastName?, company?, phone?, whatsappNumber? } column names
+//
+// multipart/form-data:
+//   file            CSV / XLSX / XLS / ODS / TSV               (required)
+//   mapping         JSON { <canonicalField>: <column header> } (optional — headers are auto-mapped when omitted)
+//                   canonical fields: fullName, email, phone, whatsappNumber
+//   defaultCountry  ISO-3166 alpha-2, e.g. "IN"                (optional — resolves numbers with no country code)
+//   whatsappOptIn   "true" | "false", default true             (consent for every number in the file)
+//   updateExisting  "true" | "false", default false            (enrich matching contacts instead of skipping them)
+//
+// Rows are importable with an email, a WhatsApp number, or both, so one file
+// serves email campaigns and WhatsApp campaigns alike.
 export async function POST(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -53,136 +66,254 @@ export async function POST(
         const formData = await req.formData();
         const file = formData.get("file") as File | null;
         const mappingStr = formData.get("mapping") as string | null;
+        const defaultCountry = (formData.get("defaultCountry") as string | null)?.toUpperCase() || undefined;
+        const whatsappOptInDefault = (formData.get("whatsappOptIn") as string | null) !== "false";
+        const updateExisting = (formData.get("updateExisting") as string | null) === "true";
 
         if (!file) {
             return NextResponse.json({ success: false, error: "No file provided" }, { status: 400 });
         }
-        if (!mappingStr) {
-            return NextResponse.json({ success: false, error: "No column mapping provided" }, { status: 400 });
-        }
 
-        let mapping: ColumnMapping;
-        try {
-            mapping = JSON.parse(mappingStr);
-        } catch {
-            return NextResponse.json({ success: false, error: "Invalid column mapping JSON" }, { status: 400 });
-        }
-
-        if (!mapping.email) {
-            return NextResponse.json({ success: false, error: "Email column mapping is required" }, { status: 400 });
-        }
-
+        // ─── Parse the file ───────────────────────────────────────────────────
         const buffer = Buffer.from(await file.arrayBuffer());
         const fileName = file.name.toLowerCase();
-
         let rows: RawRow[] = [];
 
         if (fileName.endsWith(".csv")) {
-            // Parse CSV
             const { parse } = await import("csv-parse/sync");
             rows = parse(buffer, {
                 columns: true,
                 skip_empty_lines: true,
                 trim: true,
+                bom: true,
+                relax_column_count: true,
             }) as RawRow[];
-        } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-            // Parse Excel
+        } else if ([".xlsx", ".xls", ".ods", ".tsv"].some((ext) => fileName.endsWith(ext))) {
+            // SheetJS handles Excel, OpenDocument and TSV alike. `raw: false`
+            // keeps long phone numbers from arriving as floats.
             const XLSX = await import("xlsx");
             const workbook = XLSX.read(buffer, { type: "buffer" });
-            const sheetName = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[sheetName];
-            rows = XLSX.utils.sheet_to_json<RawRow>(sheet, { defval: "" });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            rows = XLSX.utils.sheet_to_json<RawRow>(sheet, { defval: "", raw: false });
         } else {
-            return NextResponse.json({ success: false, error: "Unsupported file type. Please upload a .csv or .xlsx file." }, { status: 400 });
+            return NextResponse.json({ success: false, error: "Unsupported file type. Please upload a .csv, .xlsx, .xls, .ods or .tsv file." }, { status: 400 });
         }
 
         if (rows.length === 0) {
             return NextResponse.json({ success: false, error: "File is empty or has no data rows" }, { status: 400 });
         }
 
-        // Process rows
-        const imported: string[] = [];
-        const skipped: string[] = [];
-        const errors: { row: number; email: string; reason: string }[] = [];
+        // ─── Resolve the column mapping ───────────────────────────────────────
+        const headers = Object.keys(rows[0]);
+        let mapping: ColumnMapping;
+        if (mappingStr) {
+            let parsed: LegacyColumnMapping;
+            try {
+                parsed = JSON.parse(mappingStr);
+            } catch {
+                return NextResponse.json({ success: false, error: "Invalid column mapping JSON" }, { status: 400 });
+            }
+            // Drop empty selections ("(skip)") so they don't read blank cells.
+            for (const key of Object.keys(parsed) as (keyof LegacyColumnMapping)[]) {
+                if (!parsed[key]) delete parsed[key];
+            }
+            mapping = normalizeMapping(parsed);
+        } else {
+            mapping = autoMapColumns(headers);
+        }
+
+        if (!mapping.email && !mapping.whatsappNumber) {
+            return NextResponse.json({
+                success: false,
+                error: "Map at least one sending channel — an Email column, a WhatsApp number column, or both.",
+            }, { status: 400 });
+        }
+
+        // ─── Normalize every row, deduping within the file ────────────────────
+        const errors: RowError[] = [];
+        const candidates: NormalizedContact[] = [];
+        const seen = new Set<string>();
+        let duplicatesInFile = 0;
 
         for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            const rawEmail = row[mapping.email]?.toString().trim().toLowerCase() || "";
+            const rowNumber = i + 2; // 1-based, +1 for the header row
+            const { contact, error } = normalizeRow(rows[i], mapping, {
+                defaultCountry: defaultCountry as CountryCode | undefined,
+                whatsappOptInDefault,
+            });
 
-            if (!rawEmail) {
-                errors.push({ row: i + 2, email: "(empty)", reason: "Missing email" });
+            if (!contact) {
+                errors.push({ row: rowNumber, identifier: identify(rows[i], mapping), reason: error || "Invalid row" });
                 continue;
             }
 
-            if (!EMAIL_REGEX.test(rawEmail)) {
-                errors.push({ row: i + 2, email: rawEmail, reason: "Invalid email format" });
+            const key = contactKey(contact);
+            if (seen.has(key)) {
+                duplicatesInFile++;
                 continue;
             }
-
-            // Check for duplicate in this list
-            const existing = await Contact.findOne({ email: rawEmail, listId: id });
-            if (existing) {
-                skipped.push(rawEmail);
-                continue;
-            }
-
-            try {
-                // Check Plan Limits (In-loop to ensure we don't exceed)
-                const limitCheck = await checkPlanLimits(session.user.workspaceId, "contacts");
-                if (!limitCheck.allowed) {
-                    errors.push({ row: i + 2, email: rawEmail, reason: `Plan limit reached (${limitCheck.limit} contacts). Please upgrade.` });
-                    break; // Stop importing further rows
-                }
-
-                const importedWhatsapp = mapping.whatsappNumber
-                    ? row[mapping.whatsappNumber]?.toString().replace(/[^0-9]/g, "") || undefined
-                    : undefined;
-
-                await Contact.create({
-                    email: rawEmail,
-                    firstName: mapping.firstName ? row[mapping.firstName]?.toString().trim() || undefined : undefined,
-                    lastName: mapping.lastName ? row[mapping.lastName]?.toString().trim() || undefined : undefined,
-                    company: mapping.company ? row[mapping.company]?.toString().trim() || undefined : undefined,
-                    phone: mapping.phone ? row[mapping.phone]?.toString().trim() || undefined : undefined,
-                    whatsappNumber: importedWhatsapp,
-                    // Importing a WhatsApp number implies the list owner asserts
-                    // consent — without the flag every send skips the contact
-                    whatsappOptIn: !!importedWhatsapp,
-                    listId: id,
-                    workspaceId: session.user.workspaceId,
-                    status: "ACTIVE",
-                });
-                imported.push(rawEmail);
-            } catch (err: unknown) {
-                const mongoErr = err as { code?: number };
-                if (mongoErr.code === 11000) {
-                    // Duplicate key (race condition)
-                    skipped.push(rawEmail);
-                } else {
-                    errors.push({ row: i + 2, email: rawEmail, reason: "Database error" });
-                }
-            }
+            seen.add(key);
+            candidates.push(contact);
         }
 
-        // Update contactCount
-        if (imported.length > 0) {
-            await ContactList.findByIdAndUpdate(id, {
-                $inc: { contactCount: imported.length },
+        if (candidates.length === 0) {
+            return NextResponse.json({
+                success: true,
+                data: emptyResult(rows.length, duplicatesInFile, errors),
             });
         }
+
+        // ─── Match against contacts already in this list (2 queries, not 2×N) ──
+        const emails = candidates.map((c) => c.email).filter(Boolean) as string[];
+        const numbers = candidates.map((c) => c.whatsappNumber).filter(Boolean) as string[];
+
+        const existing = await Contact.find({
+            listId: id,
+            $or: [
+                ...(emails.length ? [{ email: { $in: emails } }] : []),
+                ...(numbers.length ? [{ whatsappNumber: { $in: numbers } }] : []),
+            ],
+        })
+            .select("_id email whatsappNumber")
+            .lean();
+
+        const existingByEmail = new Map<string, mongoose.Types.ObjectId>();
+        const existingByNumber = new Map<string, mongoose.Types.ObjectId>();
+        for (const c of existing) {
+            if (c.email) existingByEmail.set(c.email, c._id);
+            if (c.whatsappNumber) existingByNumber.set(c.whatsappNumber, c._id);
+        }
+
+        const toInsert: NormalizedContact[] = [];
+        const toUpdate: { id: mongoose.Types.ObjectId; contact: NormalizedContact }[] = [];
+
+        for (const contact of candidates) {
+            const match =
+                (contact.email && existingByEmail.get(contact.email)) ||
+                (contact.whatsappNumber && existingByNumber.get(contact.whatsappNumber));
+            if (match) {
+                if (updateExisting) toUpdate.push({ id: match, contact });
+                continue;
+            }
+            toInsert.push(contact);
+        }
+
+        // ─── Plan limit: one check, then trim to the remaining headroom ───────
+        let limitReached = false;
+        if (toInsert.length > 0) {
+            const limitCheck = await checkPlanLimits(session.user.workspaceId, "contacts");
+            const limit = limitCheck.limit ?? Number.POSITIVE_INFINITY;
+            const headroom = Math.max(0, limit - (limitCheck.current ?? 0));
+
+            if (toInsert.length > headroom) {
+                limitReached = true;
+                const rejected = toInsert.splice(headroom);
+                for (const contact of rejected) {
+                    errors.push({
+                        row: 0,
+                        identifier: contact.email || contact.whatsappNumber || "(unknown)",
+                        reason: `Plan limit reached (${limit} contacts) — upgrade to import the rest`,
+                    });
+                }
+            }
+        }
+
+        // ─── Write ────────────────────────────────────────────────────────────
+        let imported = 0;
+        if (toInsert.length > 0) {
+            const docs = toInsert.map((c) => ({
+                ...c,
+                listId: new mongoose.Types.ObjectId(id),
+                workspaceId: new mongoose.Types.ObjectId(session.user.workspaceId),
+                status: "ACTIVE" as const,
+            }));
+
+            try {
+                const inserted = await Contact.insertMany(docs, { ordered: false, rawResult: true });
+                imported = inserted.insertedCount ?? Object.keys(inserted.insertedIds ?? {}).length;
+            } catch (err: unknown) {
+                // ordered:false keeps going past duplicates raced in by a
+                // concurrent import; the good rows are still written.
+                const bulkErr = err as { insertedDocs?: unknown[]; result?: { nInserted?: number }; writeErrors?: unknown[] };
+                imported = bulkErr.result?.nInserted ?? bulkErr.insertedDocs?.length ?? 0;
+                const failed = toInsert.length - imported;
+                if (failed > 0) {
+                    errors.push({ row: 0, identifier: `${failed} contact(s)`, reason: "Already existed or failed validation" });
+                }
+            }
+        }
+
+        let updated = 0;
+        if (toUpdate.length > 0) {
+            // $set only the fields the file actually carried, so an import that
+            // enriches WhatsApp numbers never blanks an existing email or name.
+            const ops = toUpdate.map(({ id: contactId, contact }) => ({
+                updateOne: {
+                    filter: { _id: contactId, workspaceId: new mongoose.Types.ObjectId(session.user.workspaceId) },
+                    update: { $set: definedFields(contact) },
+                },
+            }));
+            const res = await Contact.bulkWrite(ops, { ordered: false });
+            updated = res.modifiedCount ?? 0;
+        }
+
+        if (imported > 0) {
+            await ContactList.findByIdAndUpdate(id, { $inc: { contactCount: imported } });
+        }
+
+        // Channel readiness of everything the file resolved to — lets the UI say
+        // "480 ready for email, 310 ready for WhatsApp" before a campaign is built.
+        const touched = [...toInsert, ...toUpdate.map((u) => u.contact)];
 
         return NextResponse.json({
             success: true,
             data: {
-                imported: imported.length,
-                skipped: skipped.length,
-                errors: errors.length,
-                errorDetails: errors.slice(0, 20), // Return first 20 errors
                 total: rows.length,
+                imported,
+                updated,
+                skipped: (updateExisting ? 0 : candidates.length - toInsert.length) + duplicatesInFile,
+                duplicatesInFile,
+                errors: errors.length,
+                errorDetails: errors.slice(0, 20),
+                emailReady: touched.filter(isEmailReady).length,
+                whatsappReady: touched.filter(isWhatsappReady).length,
+                limitReached,
+                mapping,
             },
         });
     } catch (error) {
         console.error("Import contacts error:", error);
         return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
     }
+}
+
+/** Best label for an unusable row, for the error table. */
+function identify(row: RawRow, mapping: ColumnMapping): string {
+    for (const field of ["email", "whatsappNumber", "phone", "fullName"] as const) {
+        const column = mapping[field];
+        const value = column ? row[column] : undefined;
+        if (value != null && String(value).trim()) return String(value).trim();
+    }
+    return "(empty)";
+}
+
+function definedFields(contact: NormalizedContact): Record<string, unknown> {
+    return Object.fromEntries(
+        Object.entries(contact).filter(([, value]) => value !== undefined && value !== "")
+    );
+}
+
+function emptyResult(total: number, duplicatesInFile: number, errors: RowError[]) {
+    return {
+        total,
+        imported: 0,
+        updated: 0,
+        skipped: duplicatesInFile,
+        duplicatesInFile,
+        errors: errors.length,
+        errorDetails: errors.slice(0, 20),
+        emailReady: 0,
+        whatsappReady: 0,
+        limitReached: false,
+    };
 }

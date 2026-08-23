@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
-import { isSharedSendingEnabled } from "@/lib/shared-sending";
+import { getWorkspaceSmtpConfig } from "@/lib/workspace-smtp";
 import { z } from "zod";
 
 const scheduleSchema = z.object({
@@ -57,19 +57,11 @@ export async function POST(
         }
 
         // Fail fast at schedule time — not when the cron fires
-        if (campaign.provider === "SHARED") {
-            if (!isSharedSendingEnabled()) {
-                return NextResponse.json({
-                    success: false,
-                    error: "Shared sending is not configured on this server.",
-                }, { status: 400 });
-            }
-            if (!campaign.replyTo) {
-                return NextResponse.json({
-                    success: false,
-                    error: "Shared campaigns require a reply-to email so recipients can reach you.",
-                }, { status: 400 });
-            }
+        if (campaign.channel !== "WHATSAPP" && !(await getWorkspaceSmtpConfig(session.user.workspaceId))) {
+            return NextResponse.json({
+                success: false,
+                error: "No SMTP server is configured. Add one in Settings → SMTP before scheduling.",
+            }, { status: 400 });
         }
 
         campaign.status = "SCHEDULED";

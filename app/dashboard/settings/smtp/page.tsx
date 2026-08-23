@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronLeft, Loader2, Save, Server, ShieldCheck, Mail, Info } from "lucide-react";
+import { ChevronLeft, Loader2, Save, Server, ShieldCheck, Mail, Info, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiResponse } from "@/types";
@@ -119,6 +119,34 @@ export default function SMTPSettingsPage() {
         }
     });
 
+    // Remove the saved server — sending falls back to the platform provider.
+    const deleteMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/settings/smtp", { method: "DELETE" });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || "Failed to remove SMTP settings");
+            return json;
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["settings-smtp"] });
+            setFormData({ smtpHost: "", smtpPort: 587, smtpUser: "", smtpPass: "", smtpSecure: true });
+            setIsPasswordModified(false);
+            alert(data.message || "SMTP configuration removed.");
+        },
+        onError: (error: any) => alert(error.message),
+    });
+
+    // Only what the server has saved counts as configured — not what is typed.
+    const isConfigured = !!smtpData?.data?.smtpHost;
+
+    const handleRemove = () => {
+        if (!confirm(
+            `Remove the SMTP configuration for ${smtpData?.data?.smtpHost}?\n\n` +
+            "Campaigns will send through the platform's provider instead. You can add a server again at any time."
+        )) return;
+        deleteMutation.mutate();
+    };
+
     // Email validation helper
     const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -150,11 +178,41 @@ export default function SMTPSettingsPage() {
                     <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center">
                         <Server className="w-6 h-6 text-indigo-600" />
                     </div>
-                    <div>
+                    <div className="flex-1">
                         <h3 className="font-semibold text-gray-900">Outgoing Mail Server</h3>
                         <p className="text-xs text-gray-500">These settings will override SES for campaign sending</p>
                     </div>
+                    {isConfigured && (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full shrink-0">
+                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                            Active
+                        </span>
+                    )}
                 </div>
+
+                {/* Configured state: edit the fields below, or drop the server
+                    entirely and fall back to the platform provider. */}
+                {isConfigured && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+                        <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 font-mono truncate">
+                                {smtpData?.data?.smtpHost}:{smtpData?.data?.smtpPort}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">
+                                {smtpData?.data?.smtpUser} · {smtpData?.data?.smtpSecure ? "SSL/TLS" : "STARTTLS"} · edit
+                                any field below and save to change it
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleRemove}
+                            disabled={deleteMutation.isPending}
+                            className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 bg-white border border-red-200 rounded-xl hover:bg-red-50 disabled:opacity-60 transition-colors"
+                        >
+                            {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            Remove
+                        </button>
+                    </div>
+                )}
 
                 {/* Presets */}
                 <div className="flex flex-wrap gap-2">
@@ -316,7 +374,7 @@ export default function SMTPSettingsPage() {
                         ) : (
                             <Save className="w-4 h-4" />
                         )}
-                        {saveMutation.isPending ? "Verifying..." : "Save Configuration"}
+                        {saveMutation.isPending ? "Verifying..." : isConfigured ? "Save Changes" : "Save Configuration"}
                     </button>
                 </div>
             </div>

@@ -8,18 +8,25 @@ import { Template, ApiResponse } from "@/types";
 import { TemplateCard } from "@/components/templates/TemplateCard";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-const CATEGORIES = [
-    { label: "All Templates", value: "all" },
-    { label: "Email", value: "email" },
-    { label: "WhatsApp", value: "whatsapp" },
-    { label: "My Templates", value: "custom" },
+/**
+ * Email and WhatsApp templates are never listed together — they are built
+ * differently (TipTap editor vs Meta-approved template), used by different
+ * campaign channels, and are not interchangeable. The channel is a hard split,
+ * not a filter you can turn off.
+ */
+const CHANNELS = [
+    { label: "Email", value: "EMAIL" as const },
+    { label: "WhatsApp", value: "WHATSAPP" as const },
 ];
+
+type Channel = (typeof CHANNELS)[number]["value"];
 
 export default function TemplatesPage() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
-    const [category, setCategory] = useState("all");
+    const [channel, setChannel] = useState<Channel>("EMAIL");
+    const [mineOnly, setMineOnly] = useState(false);
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const { data: templatesData, isLoading } = useQuery<ApiResponse<Template[]>>({
         queryKey: ["templates"],
@@ -32,14 +39,15 @@ export default function TemplatesPage() {
 
     const templates = templatesData?.data || [];
 
-    const filteredTemplates = templates.filter((t: Template) => {
+    // Legacy rows have no `type` — treat them as EMAIL, same as the model default.
+    const channelTemplates = templates.filter((t: Template) =>
+        channel === "WHATSAPP" ? t.type === "WHATSAPP" : t.type !== "WHATSAPP"
+    );
+
+    const filteredTemplates = channelTemplates.filter((t: Template) => {
         const matchesSearch = (t.name?.toLowerCase() || "").includes(search.toLowerCase()) ||
             (t.description?.toLowerCase() || "").includes(search.toLowerCase());
-        const matchesCategory = category === "all" ||
-            (category === "email" && t.type !== "WHATSAPP") ||
-            (category === "whatsapp" && t.type === "WHATSAPP") ||
-            (category === "custom" && !t.isGlobal);
-        return matchesSearch && matchesCategory;
+        return matchesSearch && (!mineOnly || !t.isGlobal);
     });
 
     const syncWhatsappMutation = useMutation({
@@ -92,50 +100,81 @@ export default function TemplatesPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Templates</h1>
-                    <p className="text-gray-500 mt-1">Email and WhatsApp starting points for your campaigns</p>
+                    <p className="text-gray-500 mt-1">
+                        {channel === "EMAIL"
+                            ? "Reusable email layouts for your email campaigns"
+                            : "Meta-approved message templates for your WhatsApp campaigns"}
+                    </p>
                 </div>
+                {/* Actions belong to the channel on screen — syncing Meta has no
+                    meaning on the email tab, and vice versa. */}
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => syncWhatsappMutation.mutate()}
-                        disabled={syncWhatsappMutation.isPending}
-                        className="inline-flex items-center gap-2 bg-green-50 text-green-700 text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-green-100 transition-colors border border-green-200"
-                    >
-                        {syncWhatsappMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        Sync WhatsApp
-                    </button>
-                    <button
-                        onClick={() => router.push("/dashboard/templates/new")}
-                        className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Create Custom
-                    </button>
+                    {channel === "WHATSAPP" ? (
+                        <>
+                            <button
+                                onClick={() => syncWhatsappMutation.mutate()}
+                                disabled={syncWhatsappMutation.isPending}
+                                className="inline-flex items-center gap-2 bg-green-50 text-green-700 text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-green-100 transition-colors border border-green-200"
+                            >
+                                {syncWhatsappMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                Sync from Meta
+                            </button>
+                            <button
+                                onClick={() => router.push("/dashboard/templates/new?mode=whatsapp")}
+                                className="inline-flex items-center gap-2 bg-green-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-green-700 transition-colors shadow-sm"
+                            >
+                                <Plus className="w-4 h-4" />
+                                New WhatsApp Template
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={() => router.push("/dashboard/templates/new?mode=simple")}
+                            className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+                        >
+                            <Plus className="w-4 h-4" />
+                            New Email Template
+                        </button>
+                    )}
                 </div>
             </div>
 
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
                 <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
-                    {CATEGORIES.map((c) => (
+                    {CHANNELS.map((c) => (
                         <button
                             key={c.value}
-                            onClick={() => setCategory(c.value)}
-                            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${category === c.value
+                            onClick={() => setChannel(c.value)}
+                            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${channel === c.value
                                 ? "bg-white text-gray-900 shadow-sm"
                                 : "text-gray-500 hover:text-gray-700"
                                 }`}
                         >
                             {c.label}
+                            <span className="ml-1.5 text-xs text-gray-400">
+                                {templates.filter((t) => c.value === "WHATSAPP" ? t.type === "WHATSAPP" : t.type !== "WHATSAPP").length}
+                            </span>
                         </button>
                     ))}
                 </div>
 
                 <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <label className="flex items-center gap-2 text-sm text-gray-600 whitespace-nowrap cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={mineOnly}
+                            onChange={(e) => setMineOnly(e.target.checked)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-600/20"
+                        />
+                        Mine only
+                    </label>
+
                     <div className="relative flex-1 sm:w-64">
                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
                             type="text"
-                            placeholder="Search templates..."
+                            placeholder={channel === "EMAIL" ? "Search email templates..." : "Search WhatsApp templates..."}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:border-blue-600 transition-all shadow-sm"
@@ -191,19 +230,31 @@ export default function TemplatesPage() {
                 </div>
             ) : (
                 <div className="bg-white rounded-2xl border border-gray-100 p-12 flex flex-col items-center justify-center text-center">
-                    <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
-                        <FileText className="w-6 h-6 text-blue-600" />
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${channel === "EMAIL" ? "bg-blue-50" : "bg-green-50"}`}>
+                        <FileText className={`w-6 h-6 ${channel === "EMAIL" ? "text-blue-600" : "text-green-600"}`} />
                     </div>
-                    <h2 className="text-lg font-semibold text-gray-900 mb-2">No templates found</h2>
-                    <p className="text-gray-500 text-sm max-w-sm mb-6">
-                        Try adjusting your search or filters to find what you&apos;re looking for.
-                    </p>
-                    <button
-                        onClick={() => { setSearch(""); setCategory("all"); }}
-                        className="text-blue-600 text-sm font-semibold hover:underline"
-                    >
-                        Clear all filters
-                    </button>
+                    <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                        No {channel === "EMAIL" ? "email" : "WhatsApp"} templates found
+                    </h2>
+                    {channelTemplates.length === 0 && channel === "WHATSAPP" ? (
+                        <p className="text-gray-500 text-sm max-w-sm mb-6">
+                            WhatsApp templates must be approved by Meta. Build one here, or sync the ones already
+                            approved in your Meta Business account.
+                        </p>
+                    ) : (
+                        <p className="text-gray-500 text-sm max-w-sm mb-6">
+                            Try adjusting your search or filters to find what you&apos;re looking for.
+                        </p>
+                    )}
+                    {/* Never resets the channel — that would mix the two lists again. */}
+                    {(search || mineOnly) && (
+                        <button
+                            onClick={() => { setSearch(""); setMineOnly(false); }}
+                            className="text-blue-600 text-sm font-semibold hover:underline"
+                        >
+                            Clear filters
+                        </button>
+                    )}
                 </div>
             )}
 

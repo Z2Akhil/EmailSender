@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import Domain from "@/models/Domain";
-import { deleteDomainIdentity } from "@/lib/email-service";
 
 export async function DELETE(
     req: NextRequest,
@@ -35,18 +34,10 @@ export async function DELETE(
             return NextResponse.json({ error: "Domain not found" }, { status: 404 });
         }
 
-        try {
-            // Delete from AWS SES
-            await deleteDomainIdentity(domain.domainName);
-        } catch (sesError: any) {
-            console.error("[DOMAINS_DELETE_SES_ERROR]", sesError);
-            // We'll log the SES error but continue with DB deletion locally if it's already removed or not found
-            // If it's a critical error (like wrong AWS credits), we may still want to allow the user to clean up their DB.
-        }
-
+        // Nothing external to tear down — the row only cached a DNS check.
         await Domain.findByIdAndDelete(id);
 
-        return NextResponse.json({ success: true, message: "Domain deleted successfully" });
+        return NextResponse.json({ success: true, message: "Domain removed" });
     } catch (error) {
         console.error("[DOMAINS_DELETE]", error);
         return NextResponse.json(

@@ -5,7 +5,6 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Campaign } from "@/models/Campaign";
 import { ContactList } from "@/models/Contact";
-import { isSharedSendingEnabled, getSharedFromEmail } from "@/lib/shared-sending";
 import { z } from "zod";
 
 const campaignSchema = z.object({
@@ -15,9 +14,8 @@ const campaignSchema = z.object({
     fromName: z.string().optional(),
     fromEmail: z.string().email("Invalid from email").optional().or(z.literal("")),
     replyTo: z.string().email("Invalid reply-to email").optional().or(z.literal("")),
-    provider: z.enum(["SES", "SMTP", "SHARED", "WHATSAPP"]).optional().default("SES"),
+    provider: z.enum(["SMTP", "WHATSAPP"]).optional().default("SMTP"),
     templateId: z.string().optional(),
-    domainId: z.string().optional().or(z.literal("")),
     htmlContent: z.string().optional(),
     emailDesign: z.any().optional(),
     recipientListId: z.string().min(1, "Recipient list is required"),
@@ -25,8 +23,7 @@ const campaignSchema = z.object({
     if (data.channel === "EMAIL") {
         if (!data.subject) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Subject is required", path: ["subject"] });
         if (!data.fromName) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "From name is required", path: ["fromName"] });
-        // SHARED campaigns get fromEmail assigned server-side from env
-        if (!data.fromEmail && data.provider !== "SHARED") {
+        if (!data.fromEmail) {
             ctx.addIssue({ code: z.ZodIssueCode.custom, message: "From email is required", path: ["fromEmail"] });
         }
     }
@@ -68,10 +65,6 @@ export async function POST(req: NextRequest) {
 
         await connectDB();
 
-        // Handle empty string for domainId by deleting it so Mongoose doesn't throw a CastError
-        if (validated.domainId === "") {
-            delete (validated as any).domainId;
-        }
         if (validated.templateId === "") {
             delete (validated as any).templateId;
         }
@@ -79,21 +72,6 @@ export async function POST(req: NextRequest) {
         // WhatsApp campaigns always route via the WhatsApp provider
         if (validated.channel === "WHATSAPP") {
             validated.provider = "WHATSAPP";
-        }
-
-        // Shared zero-setup sending: the platform identity is authoritative —
-        // never trust a client-supplied fromEmail for it
-        if (validated.provider === "SHARED") {
-            if (!isSharedSendingEnabled()) {
-                return NextResponse.json(
-                    { success: false, error: "Shared sending is not available on this server" },
-                    { status: 400 }
-                );
-            }
-            validated.fromEmail = getSharedFromEmail()!;
-            // Deliverability guard: replies must reach the actual sender
-            validated.replyTo = validated.replyTo || session.user.email || "";
-            delete (validated as any).domainId;
         }
 
         // Fetch the list to get the actual contact count

@@ -1,174 +1,189 @@
-import sgMail from "@sendgrid/mail";
-import {
-    SESClient,
-    VerifyDomainIdentityCommand,
-    GetIdentityVerificationAttributesCommand,
-    VerifyDomainDkimCommand,
-    GetIdentityDkimAttributesCommand,
-    DeleteIdentityCommand
-} from "@aws-sdk/client-ses";
-import nodemailer from "nodemailer";
+/**
+ * Email sending — SMTP only.
+ *
+ * Every campaign goes out through the workspace's own SMTP account (Settings →
+ * SMTP), so mail is sent from the user's real address on their provider's
+ * infrastructure. There is no platform-level fallback provider: if SMTP is not
+ * configured the send fails loudly rather than silently logging, which is the
+ * behaviour that used to hide misconfiguration in development.
+ *
+ * Deliverability rules baked in here, because they decide inbox vs spam:
+ *   - a text/plain alternative always accompanies the HTML (a HTML-only body is
+ *     a strong spam signal)
+ *   - List-Unsubscribe + List-Unsubscribe-Post headers, so Gmail/Outlook show a
+ *     native unsubscribe button (required by both for bulk senders)
+ *   - envelope sender matches the From address, so SPF aligns for DMARC
+ */
 
-if (process.env.SENDGRID_API_KEY) {
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY || "");
+import nodemailer, { type Transporter } from "nodemailer";
+
+export interface SmtpConfig {
+    host: string;
+    port: number;
+    user: string;
+    pass: string;
+    secure: boolean;
 }
-
-const sesClient = new SESClient({
-    region: process.env.AWS_REGION || "us-east-1",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    },
-});
 
 export interface SendEmailOptions {
     to: string;
     subject: string;
     html: string;
+    /** Overrides the auto-generated plain-text alternative. */
+    text?: string;
     fromName?: string;
     fromEmail?: string;
     replyTo?: string;
-    smtpConfig?: {
-        host: string;
-        port: number;
-        user: string;
-        pass: string;
-        secure: boolean;
-    };
+    /** Powers the one-click unsubscribe headers. */
+    unsubscribeUrl?: string;
+    smtpConfig?: SmtpConfig;
+}
+
+export class SmtpNotConfiguredError extends Error {
+    constructor() {
+        super("No SMTP server is configured for this workspace. Add one in Settings → SMTP.");
+        this.name = "SmtpNotConfiguredError";
+    }
+}
+
+/**
+ * Transports are cached per credential set: a bulk campaign is thousands of
+ * sends through the same account, and a fresh TCP+TLS handshake per message is
+ * both slow and a good way to get rate-limited.
+ */
+const transporterCache = new Map<string, Transporter>();
+
+function cacheKey(config: SmtpConfig): string {
+    // The password is part of the key so a credential change in Settings takes
+    // effect in the long-running worker instead of reusing a stale pool.
+    return [config.host, config.port, config.secure, config.user, config.pass].join("\u0000");
+}
+
+function getTransporter(config: SmtpConfig): Transporter {
+    const key = cacheKey(config);
+    const cached = transporterCache.get(key);
+    if (cached) return cached;
+
+    const transporter = nodemailer.createTransport({
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        auth: { user: config.user, pass: config.pass },
+        // Reuse one connection for many messages instead of one per send.
+        pool: true,
+        maxConnections: 3,
+        maxMessages: 100,
+        connectionTimeout: 20000,
+        greetingTimeout: 20000,
+        socketTimeout: 30000,
+        tls: { rejectUnauthorized: process.env.NODE_ENV === "production" },
+    });
+
+    transporterCache.set(key, transporter);
+    return transporter;
+}
+
+/** Drops a cached transport, e.g. after the workspace changes its credentials. */
+export function resetTransporter(config?: SmtpConfig) {
+    if (!config) {
+        transporterCache.forEach((t) => t.close());
+        transporterCache.clear();
+        return;
+    }
+    const key = cacheKey(config);
+    transporterCache.get(key)?.close();
+    transporterCache.delete(key);
+}
+
+/**
+ * Readable plain-text rendering of the HTML body. Not a full converter — it
+ * keeps link targets visible and collapses the rest, which is what a text part
+ * is for.
+ */
+export function htmlToText(html: string): string {
+    return html
+        .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<script[\s\S]*?<\/script>/gi, "")
+        .replace(/<!--[\s\S]*?-->/g, "")
+        // Keep the destination of a link next to its text.
+        .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, href, label) => {
+            const text = String(label).replace(/<[^>]+>/g, "").trim();
+            return text && !href.startsWith("mailto:") ? `${text} (${href})` : text || href;
+        })
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/(p|div|h[1-6]|li|tr|table|blockquote)>/gi, "\n\n")
+        .replace(/<li\b[^>]*>/gi, "• ")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
 }
 
 export const sendEmail = async ({
     to,
     subject,
     html,
+    text,
     fromName,
     fromEmail,
     replyTo,
-    smtpConfig
+    unsubscribeUrl,
+    smtpConfig,
 }: SendEmailOptions) => {
-    const from = {
-        name: fromName || "BulkMailer",
-        email: fromEmail || process.env.FROM_EMAIL || "hello@bulkmailer.com",
-    };
+    if (!smtpConfig?.host || !smtpConfig?.user) {
+        throw new SmtpNotConfiguredError();
+    }
 
-    const msg = {
-        to,
+    // The From address must be an identity the SMTP account is allowed to send
+    // as; falling back to the authenticated user is the safest default.
+    const senderAddress = fromEmail || smtpConfig.user;
+    const from = fromName ? `"${fromName}" <${senderAddress}>` : senderAddress;
+
+    const headers: Record<string, string> = {};
+    if (unsubscribeUrl) {
+        headers["List-Unsubscribe"] = `<${unsubscribeUrl}>`;
+        headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
+    }
+
+    const info = await getTransporter(smtpConfig).sendMail({
         from,
+        to,
         subject,
         html,
-        replyTo: replyTo || from.email,
-    };
+        text: text || htmlToText(html),
+        replyTo: replyTo || senderAddress,
+        // SPF checks the envelope sender; aligning it with From keeps DMARC happy.
+        envelope: { from: senderAddress, to },
+        headers,
+    });
 
+    return { success: true, messageId: info.messageId };
+};
+
+/** One-off verification used by Settings → SMTP. */
+export const verifySmtpConnection = async (config: SmtpConfig) => {
+    const transporter = nodemailer.createTransport({
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        auth: { user: config.user, pass: config.pass },
+        connectionTimeout: 20000,
+        greetingTimeout: 20000,
+        socketTimeout: 20000,
+        tls: { rejectUnauthorized: process.env.NODE_ENV === "production" },
+    });
     try {
-        // 1. Prefer Custom SMTP if provided
-        if (smtpConfig) {
-            const transporter = nodemailer.createTransport({
-                host: smtpConfig.host,
-                port: smtpConfig.port,
-                secure: smtpConfig.secure,
-                auth: {
-                    user: smtpConfig.user,
-                    pass: smtpConfig.pass,
-                },
-            });
-
-            const info = await transporter.sendMail({
-                from: fromName ? `"${fromName}" <${from.email}>` : from.email,
-                to,
-                subject,
-                html,
-                replyTo: replyTo || from.email,
-            });
-
-            return {
-                success: true,
-                messageId: info.messageId,
-            };
-        }
-
-        // 2. Fallback to SES if configured
-        if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-            // Note: Simple SendEmail for now. Real bulk might need SendRawEmail or batches.
-            // For now implementing via SES SendEmail or similar.
-            // SES requires verified identities (email or domain).
-            const { SendEmailCommand } = await import("@aws-sdk/client-ses");
-            const command = new SendEmailCommand({
-                Destination: { ToAddresses: [to] },
-                Message: {
-                    Body: { Html: { Data: html } },
-                    Subject: { Data: subject },
-                },
-                Source: fromName ? `"${fromName}" <${from.email}>` : from.email,
-                ReplyToAddresses: [replyTo || from.email],
-            });
-
-            const response = await sesClient.send(command);
-            return {
-                success: true,
-                messageId: response.MessageId,
-            };
-        }
-
-        // Fallback to SendGrid
-        if (!process.env.SENDGRID_API_KEY) {
-            console.warn("No email provider configured (SES or SendGrid). Skipping email send (Log only).");
-            console.log(`Email to ${to}: ${subject}`);
-            return { success: true, messageId: "debug-id" };
-        }
-
-        const [response] = await sgMail.send(msg);
-        return {
-            success: true,
-            messageId: response.headers["x-message-id"],
-            statusCode: response.statusCode
-        };
-    } catch (error: any) {
-        console.error("Error sending email:", error);
-        throw error;
+        await transporter.verify();
+        return true;
+    } finally {
+        transporter.close();
     }
-};
-
-/**
- * SES Domain Identity Functions
- */
-
-export const requestDomainVerification = async (domain: string) => {
-    const command = new VerifyDomainIdentityCommand({ Domain: domain });
-    const response = await sesClient.send(command);
-    return response.VerificationToken; // TXT record value
-};
-
-export const getDomainVerificationStatus = async (domain: string) => {
-    const command = new GetIdentityVerificationAttributesCommand({
-        Identities: [domain],
-    });
-    const response = await sesClient.send(command);
-    const attributes = response.VerificationAttributes?.[domain];
-    return attributes?.VerificationStatus || "NOT_FOUND";
-};
-
-export const getDomainDkimTokens = async (domain: string) => {
-    const command = new VerifyDomainDkimCommand({ Domain: domain });
-    const response = await sesClient.send(command);
-    return response.DkimTokens; // Array of CNAME values
-};
-
-export const getDomainDkimStatus = async (domain: string) => {
-    const command = new GetIdentityDkimAttributesCommand({
-        Identities: [domain],
-    });
-    const response = await sesClient.send(command);
-    const attributes = response.DkimAttributes?.[domain];
-    return {
-        tokens: attributes?.DkimTokens || [],
-        status: attributes?.DkimVerificationStatus || "NOT_STARTED",
-    };
-};
-
-export const deleteDomainIdentity = async (domain: string) => {
-    const command = new DeleteIdentityCommand({ Identity: domain });
-    await sesClient.send(command);
-    return true;
 };
 
 export const injectComplianceFooter = (html: string, unsubscribeUrl: string) => {

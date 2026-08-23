@@ -19,8 +19,8 @@ interface Props {
 
 type Step = 1 | 2 | 3;
 
-/** Parses "a@b.com, Jane <jane@x.com>" style pasted lists. */
-function parseEmails(raw: string): { email: string; firstName?: string }[] {
+/** Parses "a@b.com, Jane Doe <jane@x.com>" style pasted lists. */
+function parseEmails(raw: string): { email: string; fullName?: string }[] {
     return raw
         .split(/[\n,;]+/)
         .map(s => s.trim())
@@ -28,7 +28,7 @@ function parseEmails(raw: string): { email: string; firstName?: string }[] {
         .map(entry => {
             const named = entry.match(/^(.+?)\s*<([^>]+)>$/);
             if (named) {
-                return { email: named[2].trim(), firstName: named[1].trim().split(/\s+/)[0] };
+                return { email: named[2].trim(), fullName: named[1].trim() };
             }
             return { email: entry };
         });

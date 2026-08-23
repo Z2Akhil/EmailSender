@@ -43,8 +43,8 @@ export default function DomainsSettingsPage() {
                 </Link>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Sending Domains</h1>
-                        <p className="text-gray-500 mt-1">Authenticate your domains to improve email deliverability</p>
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Email Authentication</h1>
+                        <p className="text-gray-500 mt-1">Check the DNS records that keep your campaigns out of spam</p>
                     </div>
                     <button
                         onClick={() => setIsAddModalOpen(true)}
@@ -66,8 +66,10 @@ export default function DomainsSettingsPage() {
                         Why authenticate domains? <Info className="w-3.5 h-3.5 opacity-50" />
                     </h3>
                     <p className="text-blue-700/80 text-sm leading-relaxed">
-                        Authenticating your domain tells mailbox providers (like Gmail or Outlook) that you are the legitimate sender.
-                        This significantly reduces the chances of your emails landing in the spam folder.
+                        SPF, DKIM and DMARC tell Gmail and Outlook that you are the legitimate sender. Without all
+                        three, bulk mail from your domain is filtered or rejected outright — Gmail and Yahoo have
+                        required them from bulk senders since 2024. Your email provider gives you the record values;
+                        this page checks whether they are actually published.
                     </p>
                 </div>
             </div>
